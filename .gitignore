@@ -21,3 +21,8 @@ __pycache__/
 
 # 로그
 *.log
+
+# Node.js
+node_modules/
+dist/
+.vite/
