@@ -20,10 +20,12 @@ async function fetchDashboard(): Promise<DashboardData> {
   return res.json()
 }
 
-export function Dashboard() {
-  const [isDark, setIsDark] = useState(
-    window.matchMedia('(prefers-color-scheme: dark)').matches
-  )
+interface DashboardProps {
+  isDark: boolean
+  onToggleDark: () => void
+}
+
+export function Dashboard({ isDark, onToggleDark }: DashboardProps) {
   const [focusMode, setFocusMode] = useState<FocusMode>('sensors')
   const [highlightedSensor, setHighlightedSensor] = useState<SensorKey | null>(null)
 
@@ -62,7 +64,7 @@ export function Dashboard() {
         focusMode={focusMode}
         onFocusChange={setFocusMode}
         isDark={isDark}
-        onToggleDark={() => setIsDark(d => !d)}
+        onToggleDark={onToggleDark}
         deviceId={current.device_id}
       />
 

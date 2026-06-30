@@ -26,6 +26,18 @@ body {
   }
 }
 
+/* 모바일: 사이드바를 오버레이로 변경 */
+@media (max-width: 640px) {
+  aside {
+    position: fixed !important;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    z-index: 100;
+    box-shadow: 4px 0 16px rgba(0, 0, 0, 0.15);
+  }
+}
+
 @media (max-width: 560px) {
   .dashboard-grid {
     grid-template-columns: 1fr !important;
