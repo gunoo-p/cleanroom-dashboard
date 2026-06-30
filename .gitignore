@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Logs
 logs
 *.log
@@ -22,3 +23,28 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+=======
+# 가상환경
+venv/
+.venv/
+
+# Python 캐시
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# 환경변수
+.env
+*.env
+
+# IDE
+.vscode/
+.idea/
+
+# Mac
+.DS_Store
+
+# 로그
+*.log
+>>>>>>> c64a5981915144a6e90c337d7f3b63c51218be8e
