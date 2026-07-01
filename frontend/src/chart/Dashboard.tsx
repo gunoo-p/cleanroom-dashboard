@@ -68,19 +68,19 @@ export function Dashboard({ isDark, onToggleDark }: DashboardProps) {
         deviceId={current.device_id}
       />
 
-      {/* 3열 레이아웃 */}
+      {/* 2열 레이아웃 */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'minmax(160px,220px) 1fr minmax(160px,220px)',
+        gridTemplateColumns: 'minmax(160px,220px) 1fr',
         gridTemplateRows: 'auto',
         gap: 16,
         alignItems: 'stretch',
       }}
         className="dashboard-grid"
       >
-        {/* 좌측: 온도·습도 */}
+        {/* 좌측: 온도·습도·가스·미세입자 */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {(['temp', 'hum'] as SensorKey[]).map(key => (
+          {(['temp', 'hum', 'gas', 'pm'] as SensorKey[]).map(key => (
             <SensorBox
               key={key}
               sensorKey={key}
@@ -107,21 +107,6 @@ export function Dashboard({ isDark, onToggleDark }: DashboardProps) {
             highlightedSensor={highlightedSensor}
             isDark={isDark}
           />
-        </div>
-
-        {/* 우측: 가스·미세입자 */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {(['gas', 'pm'] as SensorKey[]).map(key => (
-            <SensorBox
-              key={key}
-              sensorKey={key}
-              meta={current.current[key]}
-              sparkData={sparkData(key)}
-              highlighted={highlightedSensor === null || highlightedSensor === key}
-              onClick={handleSensorClick}
-              isDark={isDark}
-            />
-          ))}
         </div>
       </div>
 
