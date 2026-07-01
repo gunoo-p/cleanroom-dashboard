@@ -16,5 +16,25 @@ services:
     ports:
       - "6379:6379"
 
+  ingestion:
+    build: ./services/ingestion
+    environment:
+      DB_URL: postgresql://admin:password@timescaledb:5432/sensordb
+      REDIS_URL: redis://redis:6379
+    ports:
+      - "8001:8000"
+    depends_on:
+      - timescaledb
+      - redis
+
+  query:
+    build: ./services/query
+    environment:
+      DB_URL: postgresql://admin:password@timescaledb:5432/sensordb
+    ports:
+      - "8000:8000"
+    depends_on:
+      - timescaledb
+
 volumes:
   timescale_data:
