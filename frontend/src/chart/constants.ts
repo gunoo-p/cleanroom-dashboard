@@ -1,4 +1,4 @@
-import type { SensorConfig } from './types'
+import type { SensorConfig, ChartPeriod } from './types'
 
 export const SENSOR_CONFIGS: SensorConfig[] = [
   { key: 'temp', label: '온도',    unit: '°C',   color: '#3B82F6' },
@@ -20,3 +20,18 @@ export const STATUS_LABELS = {
   warning: '경고',
   danger:  '위험',
 }
+
+export interface PeriodOption {
+  key: ChartPeriod
+  label: string
+  days: number
+  intervalMinutes: number
+}
+
+export const PERIOD_OPTIONS: PeriodOption[] = [
+  { key: '1d',  label: '1일',   days: 1,   intervalMinutes: 10 },
+  { key: '7d',  label: '1주일', days: 7,   intervalMinutes: 60 },
+  { key: '30d', label: '1개월', days: 30,  intervalMinutes: 240 },
+  { key: '6m',  label: '6개월', days: 182, intervalMinutes: 1440 },
+  { key: '1y',  label: '1년',   days: 365, intervalMinutes: 1440 },
+]

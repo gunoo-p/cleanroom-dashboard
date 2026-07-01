@@ -1,4 +1,6 @@
 import type { DashboardData, SensorPoint } from './types'
+import type { PeriodOption } from './constants'
+import { PERIOD_OPTIONS } from './constants'
 
 function clamp(v: number, lo: number, hi: number) {
   return Math.max(lo, Math.min(hi, v))
@@ -26,36 +28,35 @@ function normalize(arr: number[]): number[] {
   return arr.map(v => ((v - lo) / (hi - lo)) * 100)
 }
 
-export function generateMockData(): DashboardData {
+// 매일 반복되는 패턴: 오전 중반(6~10h)에 온도만 올라가고, 오후(14~18h)에 습도·가스 동반 상승
+export function generateMockData(option: PeriodOption = PERIOD_OPTIONS[0]): DashboardData {
   const now = new Date()
-  const start = new Date(now)
-  start.setHours(0, 0, 0, 0)
+  const n = Math.max(2, Math.round((option.days * 24 * 60) / option.intervalMinutes))
+  const start = new Date(now.getTime() - (n - 1) * option.intervalMinutes * 60 * 1000)
 
   const points: SensorPoint[] = []
-  const n = 144 // 10분 간격 x 144 = 24h
-
   const tempRaw: number[] = []
   const humRaw: number[] = []
   const gasRaw: number[] = []
   const pmRaw: number[] = []
 
-  // 패턴: 오전 중반(6~10h)에 온도만 올라가고, 오후(14~18h)에 습도·가스 동반 상승
   for (let i = 0; i < n; i++) {
-    const h = (i / n) * 24
+    const minutesFromStart = i * option.intervalMinutes
+    const h = (minutesFromStart / 60) % 24
+    const dayIndex = Math.floor(minutesFromStart / 60 / 24)
 
-    // 온도: 6~10시 단독 상승 (불량률 무관 검증용)
+    // 계절 변동(장기 구간에서만 눈에 띄는 완만한 흐름)
+    const seasonal = Math.sin((dayIndex / 365) * Math.PI * 2) * 2
+
     const tempSpike = h >= 6 && h <= 10 ? 8 * Math.sin(((h - 6) / 4) * Math.PI) : 0
-    const temp = 22 + tempSpike + Math.sin(i * 0.08) * 1.5 + (Math.random() - 0.5) * 1
+    const temp = 22 + seasonal + tempSpike + Math.sin(i * 0.08) * 1.5 + (Math.random() - 0.5) * 1
 
-    // 습도: 14~18시 상승
     const humSpike = h >= 14 && h <= 18 ? 28 * Math.sin(((h - 14) / 4) * Math.PI) : 0
     const hum = 38 + humSpike + Math.sin(i * 0.05) * 3 + (Math.random() - 0.5) * 2
 
-    // 가스: 14~18시 동반 상승 (습도와 함께 → 불량률 상승)
     const gasSpike = h >= 14 && h <= 18 ? 90 * Math.sin(((h - 14) / 4) * Math.PI) : 0
     const gas = 45 + gasSpike + Math.sin(i * 0.06) * 8 + (Math.random() - 0.5) * 5
 
-    // 미세입자: 완만한 변동
     const pm = 18 + Math.sin(i * 0.04) * 12 + (Math.random() - 0.5) * 4
 
     tempRaw.push(clamp(temp, 18, 40))
@@ -71,7 +72,7 @@ export function generateMockData(): DashboardData {
   const defectSmooth = movingAvg3(defectRaw)
 
   for (let i = 0; i < n; i++) {
-    const t = new Date(start.getTime() + i * 10 * 60 * 1000)
+    const t = new Date(start.getTime() + i * option.intervalMinutes * 60 * 1000)
     points.push({
       t: t.toISOString(),
       temp: +tempRaw[i].toFixed(1),

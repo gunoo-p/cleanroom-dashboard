@@ -1,18 +1,27 @@
 import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import type { DashboardData, FocusMode, SensorKey } from './types'
+import type { DashboardData, FocusMode, SensorKey, ChartPeriod } from './types'
 import { generateMockData } from './mockData'
 import { normalizeSeries } from './normalize'
+import { PERIOD_OPTIONS } from './constants'
 import { Header } from './components/Header'
 import { SensorBox } from './components/SensorBox'
 import { SensorChart } from './components/SensorChart'
+import { PeriodSelector } from './components/PeriodSelector'
 
-const MOCK_DATA: DashboardData = generateMockData()
+const mockCache = new Map<ChartPeriod, DashboardData>()
+function getMockData(period: ChartPeriod): DashboardData {
+  if (!mockCache.has(period)) {
+    const option = PERIOD_OPTIONS.find(o => o.key === period)!
+    mockCache.set(period, generateMockData(option))
+  }
+  return mockCache.get(period)!
+}
 
-async function fetchDashboard(): Promise<DashboardData> {
-  const today = new Date()
-  const from = new Date(today); from.setHours(0, 0, 0, 0)
-  const to = new Date(today); to.setHours(23, 59, 59, 999)
+async function fetchDashboard(days: number): Promise<DashboardData> {
+  const to = new Date()
+  const from = new Date(to)
+  from.setDate(from.getDate() - days)
 
   const url = `/api/dashboard/series?device_id=esp32-A1&from=${from.toISOString()}&to=${to.toISOString()}`
   const res = await fetch(url)
@@ -28,13 +37,17 @@ interface DashboardProps {
 export function Dashboard({ isDark, onToggleDark }: DashboardProps) {
   const [focusMode, setFocusMode] = useState<FocusMode>('sensors')
   const [highlightedSensor, setHighlightedSensor] = useState<SensorKey | null>(null)
+  const [period, setPeriod] = useState<ChartPeriod>('1d')
 
-  const { data: current = MOCK_DATA } = useQuery<DashboardData>({
-    queryKey: ['dashboard'],
-    queryFn: fetchDashboard,
+  const periodOption = PERIOD_OPTIONS.find(o => o.key === period)!
+  const fallbackData = getMockData(period)
+
+  const { data: current = fallbackData } = useQuery<DashboardData>({
+    queryKey: ['dashboard', period],
+    queryFn: () => fetchDashboard(periodOption.days),
     refetchInterval: 10_000,
     retry: false,
-    placeholderData: MOCK_DATA,
+    placeholderData: fallbackData,
   })
 
   const normalized = useMemo(() => normalizeSeries(current.points), [current.points])
@@ -97,16 +110,22 @@ export function Dashboard({ isDark, onToggleDark }: DashboardProps) {
         <div style={{
           background: cardBg,
           borderRadius: 12,
-          padding: '16px 8px 12px 0',
+          padding: '16px 8px 4px 0',
           height: 420,
           border: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`,
+          display: 'flex',
+          flexDirection: 'column',
         }}>
-          <SensorChart
-            data={normalized}
-            focusMode={focusMode}
-            highlightedSensor={highlightedSensor}
-            isDark={isDark}
-          />
+          <div style={{ flex: 1, minHeight: 0 }}>
+            <SensorChart
+              data={normalized}
+              focusMode={focusMode}
+              highlightedSensor={highlightedSensor}
+              isDark={isDark}
+              period={period}
+            />
+          </div>
+          <PeriodSelector value={period} onChange={setPeriod} isDark={isDark} />
         </div>
       </div>
 

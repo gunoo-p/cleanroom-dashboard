@@ -2,7 +2,7 @@ import {
   ComposedChart, Line, Area, XAxis, YAxis,
   Tooltip, ResponsiveContainer, ReferenceLine,
 } from 'recharts'
-import type { NormalizedPoint, FocusMode, SensorKey } from '../types'
+import type { NormalizedPoint, FocusMode, SensorKey, ChartPeriod } from '../types'
 import { SENSOR_CONFIGS, DEFECT_COLOR } from '../constants'
 
 interface Props {
@@ -10,13 +10,19 @@ interface Props {
   focusMode: FocusMode
   highlightedSensor: SensorKey | null
   isDark: boolean
+  period: ChartPeriod
 }
 
-function formatTime(isoStr: string) {
+function formatTime(isoStr: string, period: ChartPeriod = '1d') {
   const d = new Date(isoStr)
   const h = d.getHours().toString().padStart(2, '0')
   const m = d.getMinutes().toString().padStart(2, '0')
-  return `${h}:${m}`
+  const mo = (d.getMonth() + 1).toString().padStart(2, '0')
+  const day = d.getDate().toString().padStart(2, '0')
+
+  if (period === '1d') return `${h}:${m}`
+  if (period === '7d') return `${mo}/${day} ${h}시`
+  return `${mo}/${day}`
 }
 
 const CHART_KEYS: Record<SensorKey, keyof NormalizedPoint> = {
@@ -30,9 +36,10 @@ interface CustomTooltipProps {
   active?: boolean
   payload?: Array<{ payload: NormalizedPoint }>
   isDark: boolean
+  period: ChartPeriod
 }
 
-function CustomTooltip({ active, payload, isDark }: CustomTooltipProps) {
+function CustomTooltip({ active, payload, isDark, period }: CustomTooltipProps) {
   if (!active || !payload?.length) return null
   const d = payload[0].payload
   return (
@@ -46,7 +53,7 @@ function CustomTooltip({ active, payload, isDark }: CustomTooltipProps) {
       color: isDark ? '#f1f5f9' : '#0f172a',
       boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
     }}>
-      <div style={{ fontWeight: 700, marginBottom: 4 }}>{formatTime(d.t)}</div>
+      <div style={{ fontWeight: 700, marginBottom: 4 }}>{formatTime(d.t, period)}</div>
       {SENSOR_CONFIGS.map(cfg => (
         <div key={cfg.key} style={{ color: cfg.color }}>
           {cfg.label}: <b>{d[cfg.key]}{cfg.unit}</b>
@@ -59,7 +66,7 @@ function CustomTooltip({ active, payload, isDark }: CustomTooltipProps) {
   )
 }
 
-export function SensorChart({ data, focusMode, highlightedSensor, isDark }: Props) {
+export function SensorChart({ data, focusMode, highlightedSensor, isDark, period }: Props) {
   const sensorOpacity = focusMode === 'sensors' ? 1 : 0.16
   const defectOpacity = focusMode === 'defect' ? 1 : 0.3
   const defectStroke = focusMode === 'defect' ? 3 : 1.5
@@ -68,8 +75,9 @@ export function SensorChart({ data, focusMode, highlightedSensor, isDark }: Prop
   const gridColor = isDark ? '#1e3a5f' : '#e2e8f0'
   const axisColor = isDark ? '#475569' : '#94a3b8'
 
-  // thin data for performance (show every 3rd point = 30-min intervals)
-  const thinned = data.filter((_, i) => i % 3 === 0)
+  // thin data for performance/readability (target ~60 rendered points regardless of period)
+  const thinFactor = Math.max(1, Math.floor(data.length / 60))
+  const thinned = data.filter((_, i) => i % thinFactor === 0)
 
   const getSensorLineOpacity = (key: SensorKey) => {
     if (highlightedSensor && highlightedSensor !== key) return sensorOpacity * 0.25
@@ -85,7 +93,7 @@ export function SensorChart({ data, focusMode, highlightedSensor, isDark }: Prop
 
         <XAxis
           dataKey="t"
-          tickFormatter={formatTime}
+          tickFormatter={(t: string) => formatTime(t, period)}
           interval={Math.floor(thinned.length / 6)}
           tick={{ fontSize: 11, fill: axisColor }}
           axisLine={false}
@@ -105,6 +113,7 @@ export function SensorChart({ data, focusMode, highlightedSensor, isDark }: Prop
               active={props.active}
               payload={props.payload as Array<{ payload: NormalizedPoint }>}
               isDark={isDark}
+              period={period}
             />
           )}
         />

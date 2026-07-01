@@ -1,5 +1,6 @@
 export type Status = 'normal' | 'warning' | 'danger'
 export type FocusMode = 'sensors' | 'defect'
+export type ChartPeriod = '1d' | '7d' | '30d' | '6m' | '1y'
 
 export interface SensorPoint {
   t: string
