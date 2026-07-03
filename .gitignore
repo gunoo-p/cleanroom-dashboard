@@ -26,3 +26,6 @@ __pycache__/
 node_modules/
 dist/
 .vite/
+
+# Claude Code 작업 브리프 (저장소에 올리지 않음)
+claude.md
