@@ -26,9 +26,16 @@ export interface TabDef {
 export const TABS: TabDef[] = [
   {
     id: 'chart',
-    label: '환경 센서',
+    label: '대시보드',
     component: lazy(() =>
       import('../chart/Dashboard').then(m => ({ default: m.Dashboard }))
+    ) as ComponentType<TabProps>,
+  },
+  {
+    id: 'stats',
+    label: '통계',
+    component: lazy(() =>
+      import('../stats/StatsTab').then(m => ({ default: m.StatsTab }))
     ) as ComponentType<TabProps>,
   },
   // 팀원 탭을 여기에 추가하세요 ↓
