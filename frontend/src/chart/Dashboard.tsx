@@ -1,0 +1,146 @@
+import { useState, useMemo } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import type { DashboardData, FocusMode, SensorKey, ChartPeriod } from './types'
+import { generateMockData } from './mockData'
+import { normalizeSeries } from './normalize'
+import { PERIOD_OPTIONS } from './constants'
+import { Header } from './components/Header'
+import { SensorBox } from './components/SensorBox'
+import { SensorChart } from './components/SensorChart'
+import { PeriodSelector } from './components/PeriodSelector'
+
+const mockCache = new Map<ChartPeriod, DashboardData>()
+function getMockData(period: ChartPeriod): DashboardData {
+  if (!mockCache.has(period)) {
+    const option = PERIOD_OPTIONS.find(o => o.key === period)!
+    mockCache.set(period, generateMockData(option))
+  }
+  return mockCache.get(period)!
+}
+
+async function fetchDashboard(days: number): Promise<DashboardData> {
+  const to = new Date()
+  const from = new Date(to)
+  from.setDate(from.getDate() - days)
+
+  const url = `/api/dashboard/series?device_id=esp32-A1&from=${from.toISOString()}&to=${to.toISOString()}`
+  const res = await fetch(url)
+  if (!res.ok) throw new Error('API error')
+  return res.json()
+}
+
+interface DashboardProps {
+  isDark: boolean
+  onToggleDark: () => void
+}
+
+export function Dashboard({ isDark, onToggleDark }: DashboardProps) {
+  const [focusMode, setFocusMode] = useState<FocusMode>('sensors')
+  const [highlightedSensor, setHighlightedSensor] = useState<SensorKey | null>(null)
+  const [period, setPeriod] = useState<ChartPeriod>('1d')
+
+  const periodOption = PERIOD_OPTIONS.find(o => o.key === period)!
+  const fallbackData = getMockData(period)
+
+  const { data: current = fallbackData } = useQuery<DashboardData>({
+    queryKey: ['dashboard', period],
+    queryFn: () => fetchDashboard(periodOption.days),
+    refetchInterval: 10_000,
+    retry: false,
+    placeholderData: fallbackData,
+  })
+
+  const normalized = useMemo(() => normalizeSeries(current.points), [current.points])
+
+  const sparkData = (key: SensorKey) =>
+    current.points.slice(-48).map(p => p[key])
+
+  const handleSensorClick = (key: SensorKey) => {
+    setHighlightedSensor(prev => prev === key ? null : key)
+  }
+
+  const bg = isDark ? '#0f172a' : '#f8fafc'
+  const cardBg = isDark ? '#1e293b' : '#ffffff'
+
+  return (
+    <div style={{
+      minHeight: '100vh',
+      background: bg,
+      color: isDark ? '#f1f5f9' : '#0f172a',
+      fontFamily: "'Pretendard', 'Apple SD Gothic Neo', sans-serif",
+      padding: '20px 24px',
+      boxSizing: 'border-box',
+      transition: 'background 0.3s, color 0.3s',
+    }}>
+      <Header
+        defectRate={current.defect_rate_now}
+        focusMode={focusMode}
+        onFocusChange={setFocusMode}
+        isDark={isDark}
+        onToggleDark={onToggleDark}
+        deviceId={current.device_id}
+      />
+
+      {/* 2열 레이아웃 */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'minmax(160px,220px) 1fr',
+        gridTemplateRows: 'auto',
+        gap: 16,
+        alignItems: 'stretch',
+      }}
+        className="dashboard-grid"
+      >
+        {/* 좌측: 온도·습도·가스·미세입자 */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {(['temp', 'hum', 'gas', 'pm'] as SensorKey[]).map(key => (
+            <SensorBox
+              key={key}
+              sensorKey={key}
+              meta={current.current[key]}
+              sparkData={sparkData(key)}
+              highlighted={highlightedSensor === null || highlightedSensor === key}
+              onClick={handleSensorClick}
+              isDark={isDark}
+            />
+          ))}
+        </div>
+
+        {/* 중앙 차트 */}
+        <div style={{
+          background: cardBg,
+          borderRadius: 12,
+          padding: '16px 8px 4px 0',
+          height: 420,
+          border: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`,
+          display: 'flex',
+          flexDirection: 'column',
+        }}>
+          <div style={{ flex: 1, minHeight: 0 }}>
+            <SensorChart
+              data={normalized}
+              focusMode={focusMode}
+              highlightedSensor={highlightedSensor}
+              isDark={isDark}
+              period={period}
+            />
+          </div>
+          <PeriodSelector value={period} onChange={setPeriod} isDark={isDark} />
+        </div>
+      </div>
+
+      {/* 범례 */}
+      <div style={{
+        display: 'flex', flexWrap: 'wrap', gap: 16, marginTop: 14,
+        fontSize: '0.75rem', color: isDark ? '#64748b' : '#94a3b8',
+        justifyContent: 'center',
+      }}>
+        <span>Y축: 정규화값 (0~100, 구간 min–max 기준)</span>
+        <span>·</span>
+        <span>점선: 불량률 선</span>
+        <span>·</span>
+        <span>클릭: 항목 강조 / 재클릭: 해제</span>
+      </div>
+    </div>
+  )
+}
