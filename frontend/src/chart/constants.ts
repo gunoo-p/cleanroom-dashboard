@@ -29,7 +29,7 @@ export interface PeriodOption {
 }
 
 export const PERIOD_OPTIONS: PeriodOption[] = [
-  { key: '1d',  label: '1일',   days: 1,   intervalMinutes: 10 },
+  { key: '1d',  label: '1일',   days: 1,   intervalMinutes: 1 },
   { key: '7d',  label: '1주일', days: 7,   intervalMinutes: 60 },
   { key: '30d', label: '1개월', days: 30,  intervalMinutes: 240 },
   { key: '6m',  label: '6개월', days: 182, intervalMinutes: 1440 },

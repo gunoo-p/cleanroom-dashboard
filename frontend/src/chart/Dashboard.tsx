@@ -3,11 +3,20 @@ import { useQuery } from '@tanstack/react-query'
 import type { DashboardData, FocusMode, SensorKey, ChartPeriod } from './types'
 import { generateMockData } from './mockData'
 import { normalizeSeries } from './normalize'
-import { PERIOD_OPTIONS } from './constants'
+import { buildDashboardData, statusFor, type RawPoint } from './deriveDashboard'
+import { PERIOD_OPTIONS, type PeriodOption } from './constants'
 import { Header } from './components/Header'
 import { SensorBox } from './components/SensorBox'
 import { SensorChart } from './components/SensorChart'
 import { PeriodSelector } from './components/PeriodSelector'
+
+const FALLBACK_DEVICE_ID = 'esp32-A1'
+
+async function fetchDevices(): Promise<string[]> {
+  const res = await fetch('/api/devices')
+  if (!res.ok) throw new Error('API error')
+  return res.json()
+}
 
 const mockCache = new Map<ChartPeriod, DashboardData>()
 function getMockData(period: ChartPeriod): DashboardData {
@@ -18,15 +27,61 @@ function getMockData(period: ChartPeriod): DashboardData {
   return mockCache.get(period)!
 }
 
-async function fetchDashboard(days: number): Promise<DashboardData> {
+interface HistoryRow {
+  time: string
+  temperature: number | null
+  humidity: number | null
+  pm25: number | null
+  gas: number | null
+}
+
+async function fetchDashboard(deviceId: string, option: PeriodOption): Promise<DashboardData> {
   const to = new Date()
   const from = new Date(to)
-  from.setDate(from.getDate() - days)
+  from.setDate(from.getDate() - option.days)
 
-  const url = `/api/dashboard/series?device_id=esp32-A1&from=${from.toISOString()}&to=${to.toISOString()}`
+  const params = new URLSearchParams({
+    from: from.toISOString(),
+    to: to.toISOString(),
+    interval_minutes: String(option.intervalMinutes),
+  })
+  const url = `/api/sensors/${deviceId}/history?${params}`
   const res = await fetch(url)
   if (!res.ok) throw new Error('API error')
-  return res.json()
+  const rows: HistoryRow[] = await res.json()
+
+  const raw: RawPoint[] = rows
+    .filter((r): r is HistoryRow & Record<'temperature' | 'humidity' | 'pm25' | 'gas', number> =>
+      r.temperature != null && r.humidity != null && r.pm25 != null && r.gas != null)
+    .map(r => ({ t: r.time, temp: r.temperature, hum: r.humidity, gas: r.gas, pm: r.pm25 }))
+
+  if (raw.length === 0) throw new Error('no data')
+
+  return buildDashboardData(deviceId, raw)
+}
+
+interface LatestRow {
+  temperature: number | null
+  humidity: number | null
+  pm25: number | null
+  gas: number | null
+}
+
+interface LiveReading {
+  temp: number
+  hum: number
+  gas: number
+  pm: number
+}
+
+async function fetchLatest(deviceId: string): Promise<LiveReading> {
+  const res = await fetch(`/api/sensors/${deviceId}/latest`)
+  if (!res.ok) throw new Error('API error')
+  const row: LatestRow = await res.json()
+  if (row.temperature == null || row.humidity == null || row.pm25 == null || row.gas == null) {
+    throw new Error('incomplete data')
+  }
+  return { temp: row.temperature, hum: row.humidity, gas: row.gas, pm: row.pm25 }
 }
 
 interface DashboardProps {
@@ -42,13 +97,40 @@ export function Dashboard({ isDark, onToggleDark }: DashboardProps) {
   const periodOption = PERIOD_OPTIONS.find(o => o.key === period)!
   const fallbackData = getMockData(period)
 
+  const { data: devices } = useQuery<string[]>({
+    queryKey: ['devices'],
+    queryFn: fetchDevices,
+    refetchInterval: 30_000,
+    retry: false,
+  })
+  const deviceId = devices?.[0] ?? FALLBACK_DEVICE_ID
+
   const { data: current = fallbackData } = useQuery<DashboardData>({
-    queryKey: ['dashboard', period],
-    queryFn: () => fetchDashboard(periodOption.days),
+    queryKey: ['dashboard', deviceId, period],
+    queryFn: () => fetchDashboard(deviceId, periodOption),
     refetchInterval: 10_000,
     retry: false,
     placeholderData: fallbackData,
   })
+
+  // 차트(시계열)는 위 쿼리로 느긋하게 갱신하고, 상단 실시간 수치만 짧은 주기로 따로 폴링한다.
+  // 데이터 폭을 늘리지 않고도(=차트가 무거워지지 않고도) 체감 실시간성을 확보하기 위함.
+  const { data: live } = useQuery<LiveReading>({
+    queryKey: ['latest', deviceId],
+    queryFn: () => fetchLatest(deviceId),
+    refetchInterval: 3_000,
+    retry: false,
+  })
+
+  const liveCurrent = useMemo(() => {
+    if (!live) return current.current
+    const merge = (key: SensorKey) => ({
+      ...current.current[key],
+      value: +live[key].toFixed(key === 'gas' ? 0 : 1),
+      status: statusFor(key, live[key]),
+    })
+    return { temp: merge('temp'), hum: merge('hum'), gas: merge('gas'), pm: merge('pm') }
+  }, [current.current, live])
 
   const normalized = useMemo(() => normalizeSeries(current.points), [current.points])
 
@@ -97,7 +179,7 @@ export function Dashboard({ isDark, onToggleDark }: DashboardProps) {
             <SensorBox
               key={key}
               sensorKey={key}
-              meta={current.current[key]}
+              meta={liveCurrent[key]}
               sparkData={sparkData(key)}
               highlighted={highlightedSensor === null || highlightedSensor === key}
               onClick={handleSensorClick}
