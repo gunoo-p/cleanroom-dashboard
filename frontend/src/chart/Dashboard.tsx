@@ -89,7 +89,7 @@ interface DashboardProps {
 
 export function Dashboard({ isDark, onToggleDark, zone, onZoneChange }: DashboardProps) {
   const [focusMode, setFocusMode] = useState<FocusMode>('sensors')
-  const [highlightedSensor, setHighlightedSensor] = useState<SensorKey | null>(null)
+  const [highlightedSensors, setHighlightedSensors] = useState<SensorKey[]>([])
   const [period, setPeriod] = useState<ChartPeriod>('1d')
 
   const periodOption = PERIOD_OPTIONS.find(o => o.key === period)!
@@ -130,7 +130,9 @@ export function Dashboard({ isDark, onToggleDark, zone, onZoneChange }: Dashboar
     current.points.slice(-48).map(p => p[key])
 
   const handleSensorClick = (key: SensorKey) => {
-    setHighlightedSensor(prev => prev === key ? null : key)
+    setHighlightedSensors(prev =>
+      prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
+    )
   }
 
   const bg = isDark ? '#0f172a' : '#f8fafc'
@@ -177,7 +179,7 @@ export function Dashboard({ isDark, onToggleDark, zone, onZoneChange }: Dashboar
               sensorKey={key}
               meta={liveCurrent[key]}
               sparkData={sparkData(key)}
-              highlighted={highlightedSensor === null || highlightedSensor === key}
+              highlighted={highlightedSensors.length === 0 || highlightedSensors.includes(key)}
               onClick={handleSensorClick}
               isDark={isDark}
             />
@@ -198,7 +200,7 @@ export function Dashboard({ isDark, onToggleDark, zone, onZoneChange }: Dashboar
             <SensorChart
               data={normalized}
               focusMode={focusMode}
-              highlightedSensor={highlightedSensor}
+              highlightedSensors={highlightedSensors}
               isDark={isDark}
               period={period}
             />
@@ -217,7 +219,7 @@ export function Dashboard({ isDark, onToggleDark, zone, onZoneChange }: Dashboar
         <span>·</span>
         <span>점선: 불량률 선</span>
         <span>·</span>
-        <span>클릭: 항목 강조 / 재클릭: 해제</span>
+        <span>클릭: 항목 강조(여러 개 선택 가능) / 재클릭: 해제</span>
       </div>
     </div>
   )

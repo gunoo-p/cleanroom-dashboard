@@ -45,7 +45,7 @@ export function HumidityDefectScatterPanel({ data, isDark }: Props) {
 
   return (
     <Panel
-      title="③ 습도 vs 불량률 (SECOM)"
+      title="습도 vs 불량률 (SECOM)"
       isDark={isDark}
       badge={<span style={{ fontSize: '0.72rem', fontWeight: 700, color: isDark ? '#94a3b8' : '#64748b' }}>r = {data.r.toFixed(2)}</span>}
     >

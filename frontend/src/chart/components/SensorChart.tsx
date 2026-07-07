@@ -9,7 +9,7 @@ import { SENSOR_CONFIGS, DEFECT_COLOR } from '../constants'
 interface Props {
   data: NormalizedPoint[]
   focusMode: FocusMode
-  highlightedSensor: SensorKey | null
+  highlightedSensors: SensorKey[]
   isDark: boolean
   period: ChartPeriod
 }
@@ -68,7 +68,7 @@ function CustomTooltip({ active, payload, isDark, period }: CustomTooltipProps) 
   )
 }
 
-export function SensorChart({ data, focusMode, highlightedSensor, isDark, period }: Props) {
+export function SensorChart({ data, focusMode, highlightedSensors, isDark, period }: Props) {
   const sensorOpacity = focusMode === 'sensors' ? 1 : 0.16
   const defectOpacity = focusMode === 'defect' ? 1 : 0.3
   const defectStroke = focusMode === 'defect' ? 3 : 1.5
@@ -82,7 +82,7 @@ export function SensorChart({ data, focusMode, highlightedSensor, isDark, period
   const thinned = data.filter((_, i) => i % thinFactor === 0)
 
   const getSensorLineOpacity = (key: SensorKey) => {
-    if (highlightedSensor && highlightedSensor !== key) return sensorOpacity * 0.25
+    if (highlightedSensors.length > 0 && !highlightedSensors.includes(key)) return sensorOpacity * 0.25
     return sensorOpacity
   }
 

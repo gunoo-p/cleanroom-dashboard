@@ -1,4 +1,4 @@
-// 온도/가스 이동평균 추세를 보여주는 라인 차트 패널(설비 이상 예측용).
+// 센서 이동평균 추세를 보여주는 라인 차트 패널(설비 이상/공기질 예측용).
 import {
   ComposedChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
   ReferenceLine, ReferenceArea,

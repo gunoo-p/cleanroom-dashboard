@@ -1,4 +1,4 @@
-// 통계(분석) 탭의 메인 컴포넌트: 설비 이상·필터 교체·수율 상관관계 3개 행을 조합한다.
+// 통계(분석) 탭의 메인 컴포넌트: 설비 이상·공기질/필터 교체 예측·수율 상관관계 행을 조합한다.
 import { useMemo, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import type { TabProps } from '../tabs'
@@ -9,8 +9,7 @@ import { deriveAnalysis } from './deriveAnalysis'
 import { THRESHOLDS, LABELS, COLORS } from './config'
 import { TrendPanel } from './components/TrendPanel'
 import { EquipmentAnomalyCard } from './components/EquipmentAnomalyCard'
-import { PmDailyPanel } from './components/PmDailyPanel'
-import { PmWeeklyPanel } from './components/PmWeeklyPanel'
+import { DpTrendPanel } from './components/DpTrendPanel'
 import { FilterReplacementCard } from './components/FilterReplacementCard'
 import { HumidityDefectScatterPanel } from './components/HumidityDefectScatterPanel'
 import { CorrelationHeatmap } from './components/CorrelationHeatmap'
@@ -66,7 +65,7 @@ export function StatsTab({ isDark, zone, onZoneChange }: TabProps) {
       {/* 행 1: 설비 이상 예측 */}
       <AnalysisRow>
         <TrendPanel
-          title="① 온도 이동평균 추세"
+          title="온도 이동평균 추세"
           unit="°C"
           data={view.equipmentAnomaly.temp}
           isDark={isDark}
@@ -94,10 +93,22 @@ export function StatsTab({ isDark, zone, onZoneChange }: TabProps) {
         <EquipmentAnomalyCard data={view.equipmentAnomaly} isDark={isDark} />
       </AnalysisRow>
 
-      {/* 행 2: 필터 교체 예측 */}
+      {/* 행 2: 공기질 추세 · 필터 교체 예측(신호원: 차압, 데모) */}
       <AnalysisRow>
-        <PmDailyPanel daily={view.filterReplacement.daily} isDark={isDark} />
-        <PmWeeklyPanel weekly={view.filterReplacement.weekly} isDark={isDark} />
+        <TrendPanel
+          title="① 공기질 이동평균 추세"
+          unit={LABELS.air.unit}
+          data={view.trends.air}
+          isDark={isDark}
+          rawColor={COLORS.airRaw}
+          maColor={COLORS.airMA}
+          warning={THRESHOLDS.air.warning}
+          danger={THRESHOLDS.air.danger}
+          axisMin={THRESHOLDS.air.axisMin}
+          axisMax={THRESHOLDS.air.axisMax}
+          risingLabel="상승 추세 감지"
+        />
+        <DpTrendPanel daily={view.filterReplacement.daily} isDark={isDark} />
         <FilterReplacementCard data={view.filterReplacement} isDark={isDark} />
       </AnalysisRow>
 

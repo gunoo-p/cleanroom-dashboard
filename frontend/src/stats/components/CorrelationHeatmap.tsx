@@ -1,11 +1,11 @@
 // 센서 간 상관계수를 색상 매트릭스로 보여주는 히트맵.
 import { Fragment } from 'react'
 import { Panel } from './Panel'
-import { SENSOR_CONFIGS } from '../../chart/constants'
+import { SENSOR_DISPLAY } from '../config'
 import type { CorrelationCell } from '../deriveAnalysis'
 import type { SensorKey } from '../types'
 
-const KEYS: SensorKey[] = ['temp', 'hum', 'gas', 'pm']
+const KEYS: SensorKey[] = ['temp', 'hum', 'gas', 'pm', 'pressure']
 
 function cellColor(r: number, isDark: boolean) {
   const intensity = Math.min(1, Math.abs(r))
@@ -24,7 +24,7 @@ interface Props {
 }
 
 export function CorrelationHeatmap({ matrix, isDark }: Props) {
-  const labelOf = (k: SensorKey) => SENSOR_CONFIGS.find(c => c.key === k)!.label
+  const labelOf = (k: SensorKey) => SENSOR_DISPLAY[k].label
   const cellOf = (row: SensorKey, col: SensorKey) => matrix.find(c => c.row === row && c.col === col)!.r
   const textMuted = isDark ? '#94a3b8' : '#64748b'
 
