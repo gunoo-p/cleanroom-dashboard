@@ -1,3 +1,4 @@
+// 좌측 사이드바: 탭 목록·다크모드 토글·열기/닫기 버튼.
 import type { TabDef } from '../tabs'
 
 interface SidebarProps {
@@ -22,7 +23,7 @@ export function Sidebar({ tabs, activeId, onSelect, isOpen, onToggle, isDark }: 
     <aside
       style={{
         width: isOpen ? 180 : 60,
-        minHeight: '100vh',
+        height: '100%',
         background: bg,
         borderRight: `1px solid ${border}`,
         display: 'flex',
@@ -70,7 +71,7 @@ export function Sidebar({ tabs, activeId, onSelect, isOpen, onToggle, isDark }: 
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: 0,
+                gap: 10,
                 width: '100%',
                 padding: '10px 18px',
                 background: isActive ? activeBg : 'none',
@@ -91,7 +92,7 @@ export function Sidebar({ tabs, activeId, onSelect, isOpen, onToggle, isDark }: 
                 if (!isActive) (e.currentTarget as HTMLButtonElement).style.background = 'none'
               }}
             >
-              <span style={{ fontSize: '1.1rem', flexShrink: 0 }}></span>
+              <span style={{ display: 'flex', flexShrink: 0 }}>{tab.icon}</span>
               {isOpen && <span>{tab.label}</span>}
             </button>
           )

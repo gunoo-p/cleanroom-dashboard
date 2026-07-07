@@ -1,3 +1,4 @@
+// 정규화된 센서값과 불량률을 함께 보여주는 대시보드 메인 시계열 차트.
 import {
   ComposedChart, Line, Area, XAxis, YAxis,
   Tooltip, ResponsiveContainer, ReferenceLine,
@@ -26,10 +27,11 @@ function formatTime(isoStr: string, period: ChartPeriod = '1d') {
 }
 
 const CHART_KEYS: Record<SensorKey, keyof NormalizedPoint> = {
-  temp: 'tempN',
-  hum:  'humN',
-  gas:  'gasN',
-  pm:   'pmN',
+  temp:     'tempN',
+  hum:      'humN',
+  gas:      'gasN',
+  pm:       'pmN',
+  pressure: 'pressureN',
 }
 
 interface CustomTooltipProps {

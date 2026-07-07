@@ -42,7 +42,7 @@ export const COLORS = {
 
 export const LABELS = {
   title: '예측 분석 대시보드',
-  subtitle: 'esp32-A1 · 설비 이상 예측 · 필터 교체 예측 · 수율 상관관계 (SECOM 기반)',
+  subtitle: '설비 이상 예측 · 필터 교체 예측 · 수율 상관관계 (SECOM 기반)',
 }
 
 export const SEVERITY_COLORS: Record<'normal' | 'warning' | 'danger', { bg: string; text: string }> = {

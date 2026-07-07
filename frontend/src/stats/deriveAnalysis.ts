@@ -1,3 +1,4 @@
+// 원시 시계열로부터 설비 이상·필터 교체·수율 상관관계 등 분석 지표를 계산한다.
 import type { AnalysisData, Severity, SensorKey } from './types'
 import { THRESHOLDS, TREND, FILTER_MODEL } from './config'
 import { movingAverage, linearRegression, pearsonCorrelation, etaToThreshold, mean, clamp } from './calc'

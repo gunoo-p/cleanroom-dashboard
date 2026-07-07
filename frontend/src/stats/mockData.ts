@@ -1,5 +1,6 @@
-import type { AnalysisData } from './types'
-import type { SensorPoint } from '../chart/types'
+// 백엔드 미연결 시 통계 탭을 채우는 시드(mock) 데이터 생성기.
+import type { AnalysisData, SensorPoint } from './types'
+import { ZONES, zoneDeviceId, type Zone } from '../shared/zone'
 
 function clamp(v: number, lo: number, hi: number) {
   return Math.max(lo, Math.min(hi, v))
@@ -9,7 +10,9 @@ function clamp(v: number, lo: number, hi: number) {
 // 최근 24시간: 온도·가스가 서서히 상승해 경고/위험 임계에 근접(설비 이상 예측 패널용).
 // 최근 30일: 미세입자 베이스라인이 꾸준히 상승(필터 교체 예측 패널용).
 // 습도가 오르면 가스·불량률도 함께 오르도록 설계(상관관계 패널용).
-export function generateAnalysisMockData(deviceId = 'esp32-A1'): AnalysisData {
+// zone마다 기준치를 조금씩 다르게 둬서, 백엔드 미연결 상태에서도 구역별 차이가 보이게 한다.
+export function generateAnalysisMockData(zone: Zone = 'A'): AnalysisData {
+  const offset = ZONES.indexOf(zone) * 1.5
   const days = 30
   const hoursPerDay = 24
   const n = days * hoursPerDay
@@ -33,19 +36,19 @@ export function generateAnalysisMockData(deviceId = 'esp32-A1'): AnalysisData {
 
     // 온도: 평소엔 완만한 일교차, 마지막 하루 동안 서서히 상승(설비 이상 조짐)
     const tempRamp = isLastDay ? (hourOfDay / hoursPerDay) * 14 : 0
-    const temp = 25 + dailyCycle * 2 + tempRamp + (Math.random() - 0.5) * 1.2
+    const temp = 25 + offset + dailyCycle * 2 + tempRamp + (Math.random() - 0.5) * 1.2
 
     // 습도: 30일에 걸쳐 완만히 상승 + 일간 변동
     const humDrift = (dayIndex / days) * 18
-    const hum = 38 + humDrift + dailyCycle * 4 + (Math.random() - 0.5) * 3
+    const hum = 38 + offset * 2 + humDrift + dailyCycle * 4 + (Math.random() - 0.5) * 3
 
     // 가스: 습도와 함께 완만히 상승 + 마지막 하루엔 추가로 급상승(동반 상승 패턴)
     const gasRamp = isLastDay ? (hourOfDay / hoursPerDay) * 220 : 0
-    const gas = 60 + humDrift * 3 + gasRamp + (Math.random() - 0.5) * 10
+    const gas = 60 + offset * 6 + humDrift * 3 + gasRamp + (Math.random() - 0.5) * 10
 
     // 미세입자: 30일간 베이스라인이 꾸준히 상승(필터 열화 가정)
     const pmDrift = (dayIndex / (days - 1)) * 28
-    const pm = 15 + pmDrift + Math.sin(i * 0.15) * 3 + (Math.random() - 0.5) * 3
+    const pm = 15 + offset * 3 + pmDrift + Math.sin(i * 0.15) * 3 + (Math.random() - 0.5) * 3
 
     tempRaw.push(clamp(temp, 15, 50))
     humRaw.push(clamp(hum, 20, 95))
@@ -74,5 +77,5 @@ export function generateAnalysisMockData(deviceId = 'esp32-A1'): AnalysisData {
     })
   }
 
-  return { device_id: deviceId, points }
+  return { device_id: zoneDeviceId(zone), points }
 }

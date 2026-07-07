@@ -1,3 +1,4 @@
+// 통계(분석) 탭의 메인 컴포넌트: 설비 이상·필터 교체·수율 상관관계 3개 행을 조합한다.
 import { useMemo, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import type { TabProps } from '../tabs'
@@ -14,8 +15,8 @@ import { FilterReplacementCard } from './components/FilterReplacementCard'
 import { HumidityDefectScatterPanel } from './components/HumidityDefectScatterPanel'
 import { CorrelationHeatmap } from './components/CorrelationHeatmap'
 import { YieldCorrelationCard } from './components/YieldCorrelationCard'
-
-const MOCK_DATA: AnalysisData = generateAnalysisMockData()
+import { ZoneSelector } from '../shared/ZoneSelector'
+import { zoneDeviceId } from '../shared/zone'
 
 function AnalysisRow({ children }: { children: ReactNode }) {
   return (
@@ -25,13 +26,16 @@ function AnalysisRow({ children }: { children: ReactNode }) {
   )
 }
 
-export function StatsTab({ isDark }: TabProps) {
-  const { data: current = MOCK_DATA } = useQuery<AnalysisData>({
-    queryKey: ['analysis'],
-    queryFn: () => fetchAnalysis(MOCK_DATA.device_id),
+export function StatsTab({ isDark, zone, onZoneChange }: TabProps) {
+  const fallbackData = useMemo(() => generateAnalysisMockData(zone), [zone])
+  const deviceId = zoneDeviceId(zone)
+
+  const { data: current = fallbackData } = useQuery<AnalysisData>({
+    queryKey: ['analysis', deviceId],
+    queryFn: () => fetchAnalysis(deviceId),
     refetchInterval: 60_000,
     retry: false,
-    placeholderData: MOCK_DATA,
+    placeholderData: fallbackData,
   })
 
   const view = useMemo(() => deriveAnalysis(current), [current])
@@ -48,9 +52,15 @@ export function StatsTab({ isDark }: TabProps) {
       padding: '20px 24px',
       boxSizing: 'border-box',
     }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: 12 }}>
+        <ZoneSelector value={zone} onChange={onZoneChange} isDark={isDark} />
+      </div>
+
       <div style={{ marginBottom: 16 }}>
         <div style={{ fontSize: '1.25rem', fontWeight: 800 }}>{LABELS.title}</div>
-        <div style={{ fontSize: '0.78rem', color: textMuted, marginTop: 2 }}>{LABELS.subtitle}</div>
+        <div style={{ fontSize: '0.78rem', color: textMuted, marginTop: 2 }}>
+          {current.device_id} · {LABELS.subtitle}
+        </div>
       </div>
 
       {/* 행 1: 설비 이상 예측 */}

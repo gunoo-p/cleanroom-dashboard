@@ -1,3 +1,4 @@
+// 통계(분석) 탭이 백엔드에서 원시 시계열 데이터를 가져오는 API 호출.
 import type { AnalysisData } from './types'
 
 export async function fetchAnalysis(deviceId: string, days = 30): Promise<AnalysisData> {

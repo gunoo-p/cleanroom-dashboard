@@ -1,3 +1,4 @@
+// 미세입자(PM) 일별 평균 추세와 향후 예측을 보여주는 차트 패널(필터 교체 예측용).
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
   ReferenceLine, ReferenceArea,
@@ -23,7 +24,7 @@ export function PmDailyPanel({ daily, isDark }: Props) {
 
   return (
     <Panel title="② 미세입자 일별 평균 추세" isDark={isDark}>
-      <ResponsiveContainer width="100%" height="100%">
+      <ResponsiveContainer width="100%" height="100%" debounce={200}>
         <ComposedChart data={daily} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
           <XAxis
             dataKey="day"

@@ -1,3 +1,4 @@
+// 온도/가스 이동평균 추세를 보여주는 라인 차트 패널(설비 이상 예측용).
 import {
   ComposedChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
   ReferenceLine, ReferenceArea,
@@ -42,7 +43,7 @@ export function TrendPanel({ title, unit, data, isDark, rawColor, maColor, warni
       isDark={isDark}
       badge={data.isRising ? <Badge label={risingLabel} severity="danger" isDark={isDark} /> : undefined}
     >
-      <ResponsiveContainer width="100%" height="100%">
+      <ResponsiveContainer width="100%" height="100%" debounce={200}>
         <ComposedChart data={data.points} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
           <XAxis
             dataKey="t"

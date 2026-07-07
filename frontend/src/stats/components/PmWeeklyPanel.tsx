@@ -1,3 +1,4 @@
+// 주별 PM 베이스라인 상승을 보여주는 막대 차트 패널.
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, LabelList, Cell,
 } from 'recharts'
@@ -19,7 +20,7 @@ export function PmWeeklyPanel({ weekly, isDark }: Props) {
 
   return (
     <Panel title="주별 PM 베이스라인 상승" isDark={isDark}>
-      <ResponsiveContainer width="100%" height="100%">
+      <ResponsiveContainer width="100%" height="100%" debounce={200}>
         <BarChart data={weekly} margin={{ top: 16, right: 8, left: -16, bottom: 0 }}>
           <XAxis dataKey="label" tick={{ fontSize: 10, fill: axisColor }} axisLine={false} tickLine={false} />
           <YAxis domain={[0, THRESHOLDS.pm.axisMax]} tick={{ fontSize: 10, fill: axisColor }} axisLine={false} tickLine={false} />

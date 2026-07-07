@@ -1,3 +1,4 @@
+// 심각도(정상/경고/위험)를 표시하는 작은 배지.
 import type { Severity } from '../types'
 import { SEVERITY_COLORS } from '../config'
 

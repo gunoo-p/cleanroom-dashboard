@@ -1,3 +1,4 @@
+// 필터 잔여 수명·교체 예상 시점을 요약하는 카드.
 import { Panel } from './Panel'
 import { Badge } from './Badge'
 import { COLORS } from '../config'

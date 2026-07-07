@@ -1,9 +1,10 @@
+// 시계열 센서값을 0~100 스케일로 정규화.
 import type { SensorPoint, NormalizedPoint } from './types'
 
 export function normalizeSeries(points: SensorPoint[]): NormalizedPoint[] {
   if (points.length === 0) return []
 
-  const keys = ['temp', 'hum', 'gas', 'pm'] as const
+  const keys = ['temp', 'hum', 'gas', 'pm', 'pressure'] as const
 
   const ranges = {} as Record<typeof keys[number], { min: number; max: number }>
   for (const k of keys) {
@@ -23,10 +24,12 @@ export function normalizeSeries(points: SensorPoint[]): NormalizedPoint[] {
     hum: p.hum,
     gas: p.gas,
     pm: p.pm,
+    pressure: p.pressure,
     defect_rate: p.defect_rate,
-    tempN: +norm(p.temp, 'temp').toFixed(1),
-    humN:  +norm(p.hum,  'hum').toFixed(1),
-    gasN:  +norm(p.gas,  'gas').toFixed(1),
-    pmN:   +norm(p.pm,   'pm').toFixed(1),
+    tempN:     +norm(p.temp,     'temp').toFixed(1),
+    humN:      +norm(p.hum,      'hum').toFixed(1),
+    gasN:      +norm(p.gas,      'gas').toFixed(1),
+    pmN:       +norm(p.pm,       'pm').toFixed(1),
+    pressureN: +norm(p.pressure, 'pressure').toFixed(1),
   }))
 }

@@ -1,3 +1,4 @@
+// 정상/경고/위험 상태를 표시하는 작은 배지.
 import type { Status } from '../types'
 import { STATUS_COLORS, STATUS_LABELS } from '../constants'
 
