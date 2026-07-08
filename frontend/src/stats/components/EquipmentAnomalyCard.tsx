@@ -1,3 +1,4 @@
+// 설비 이상 조짐(온도·가스 변화율, 위험임계 도달 예상 시간)을 요약하는 카드.
 import { Panel } from './Panel'
 import { Badge } from './Badge'
 import type { EquipmentAnomalyView } from '../deriveAnalysis'

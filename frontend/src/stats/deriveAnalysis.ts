@@ -1,7 +1,7 @@
+// 원시 시계열로부터 설비 이상·필터 교체·수율 상관관계 등 분석 지표를 계산한다.
 import type { AnalysisData, Severity, SensorKey } from './types'
-import { THRESHOLDS, TREND, FILTER_MODEL } from './config'
+import { THRESHOLDS, TREND, FILTER_MODEL, SENSOR_DISPLAY } from './config'
 import { movingAverage, linearRegression, pearsonCorrelation, etaToThreshold, mean, clamp } from './calc'
-import { SENSOR_CONFIGS } from '../chart/constants'
 
 // ── 설비 이상 예측 (행 1) ───────────────────────────────────────────
 export interface TrendPanelPoint { t: string; raw: number; ma: number }
@@ -75,12 +75,21 @@ function buildEquipmentAnomaly(data: AnalysisData): EquipmentAnomalyView {
   return { temp, gas, status }
 }
 
-// ── 필터 교체 예측 (행 2) ───────────────────────────────────────────
-export interface DailyPmPoint { day: number; value: number | null; trend: number; projected: boolean }
-export interface WeeklyPmPoint { label: string; value: number; severity: Severity }
+// ── 공기질 추세 (행 2 좌1) ───────────────────────────────────────────
+function buildAirTrend(data: AnalysisData): TrendPanelData {
+  const recent = last24h(data)
+  return buildTrendPanel(
+    recent.map(p => ({ t: p.t, value: p.pm })),
+    THRESHOLDS.air.danger,
+    TREND.risingSlopePerHour.air,
+  )
+}
+
+// ── 필터 교체 예측 (행 2 좌2/우) — 신호원: 차압(dp, chart의 'pressure' 필드) ──────────
+// ⚠ 데모: 하드웨어 배관이 실제 필터 전후에 연결되기 전까지 이 값은 필터 상태와 무관한 목업이다.
+export interface DailyDpPoint { day: number; value: number | null; trend: number; projected: boolean }
 export interface FilterReplacementView {
-  daily: DailyPmPoint[]
-  weekly: WeeklyPmPoint[]
+  daily: DailyDpPoint[]
   remainingLifePct: number
   currentAvg: number
   changeVsLastWeek: number
@@ -95,14 +104,14 @@ function groupByDay(data: AnalysisData): number[] {
   for (const p of data.points) {
     const key = p.t.slice(0, 10)
     if (!buckets.has(key)) buckets.set(key, [])
-    buckets.get(key)!.push(p.pm)
+    buckets.get(key)!.push(p.pressure)
   }
   return [...buckets.values()].map(mean)
 }
 
 // ⚠ placeholder: 실제 필터 열화 모델이 나오면 remainingLifePct 계산만 교체하면 된다.
 function estimateRemainingLifePct(currentAvg: number): number {
-  return clamp(100 * (1 - currentAvg / FILTER_MODEL.lifeFloorPm), 0, 100)
+  return clamp(100 * (1 - currentAvg / FILTER_MODEL.lifeFloorDp), 0, 100)
 }
 
 function buildFilterReplacement(data: AnalysisData): FilterReplacementView {
@@ -115,10 +124,10 @@ function buildFilterReplacement(data: AnalysisData): FilterReplacementView {
   const priorAvg = mean(dailyAvg.slice(-14, -7))
   const changeVsLastWeek = dailyAvg.length >= 14 ? currentAvg - priorAvg : 0
 
-  const etaDays = etaToThreshold(currentAvg, THRESHOLDS.pm.warning, slope)
+  const etaDays = etaToThreshold(currentAvg, THRESHOLDS.dp.warning, slope)
   const projectionDays = etaDays != null ? Math.min(Math.ceil(etaDays), MAX_PROJECTION_DAYS) : Math.round(MAX_PROJECTION_DAYS / 2)
 
-  const daily: DailyPmPoint[] = dailyAvg.map((v, i) => ({
+  const daily: DailyDpPoint[] = dailyAvg.map((v, i) => ({
     day: i + 1,
     value: +v.toFixed(1),
     trend: +(slope * (i + 1) + intercept).toFixed(1),
@@ -129,22 +138,12 @@ function buildFilterReplacement(data: AnalysisData): FilterReplacementView {
     daily.push({ day, value: null, trend: +(slope * day + intercept).toFixed(1), projected: true })
   }
 
-  const weekly: WeeklyPmPoint[] = []
-  for (let i = 0; i < dailyAvg.length; i += 7) {
-    const avg = mean(dailyAvg.slice(i, i + 7))
-    weekly.push({
-      label: `${weekly.length + 1}주차`,
-      value: +avg.toFixed(1),
-      severity: avg >= THRESHOLDS.pm.warning ? 'danger' : avg >= THRESHOLDS.pm.warning * 0.85 ? 'warning' : 'normal',
-    })
-  }
-
   const remainingLifePct = estimateRemainingLifePct(currentAvg)
   const status: Severity =
     remainingLifePct <= FILTER_MODEL.dangerLifePct ? 'danger' :
     remainingLifePct <= FILTER_MODEL.warningLifePct ? 'warning' : 'normal'
 
-  return { daily, weekly, remainingLifePct, currentAvg, changeVsLastWeek, etaDays, status }
+  return { daily, remainingLifePct, currentAvg, changeVsLastWeek, etaDays, status }
 }
 
 // ── 수율 상관관계 (행 3) ────────────────────────────────────────────
@@ -159,7 +158,7 @@ export interface YieldCorrelationView {
   bannerMultiplier: number | null
 }
 
-const SENSOR_KEYS: SensorKey[] = ['temp', 'hum', 'gas', 'pm']
+const SENSOR_KEYS: SensorKey[] = ['temp', 'hum', 'gas', 'pm', 'pressure']
 
 function buildYieldCorrelation(data: AnalysisData): YieldCorrelationView {
   const pts = data.points
@@ -168,6 +167,7 @@ function buildYieldCorrelation(data: AnalysisData): YieldCorrelationView {
     hum: pts.map(p => p.hum),
     gas: pts.map(p => p.gas),
     pm: pts.map(p => p.pm),
+    pressure: pts.map(p => p.pressure),
   }
   const defect = pts.map(p => p.defect_rate)
 
@@ -189,7 +189,7 @@ function buildYieldCorrelation(data: AnalysisData): YieldCorrelationView {
     .sort((a, b) => Math.abs(b.r) - Math.abs(a.r))
     .slice(0, 3)
     .map(({ key, r: cr }) => {
-      const cfg = SENSOR_CONFIGS.find(c => c.key === key)!
+      const cfg = SENSOR_DISPLAY[key]
       return { key, label: cfg.label, color: cfg.color, r: cr }
     })
 
@@ -203,6 +203,7 @@ function buildYieldCorrelation(data: AnalysisData): YieldCorrelationView {
 
 export interface AnalysisView {
   equipmentAnomaly: EquipmentAnomalyView
+  trends: { air: TrendPanelData }
   filterReplacement: FilterReplacementView
   yieldCorrelation: YieldCorrelationView
 }
@@ -210,6 +211,7 @@ export interface AnalysisView {
 export function deriveAnalysis(data: AnalysisData): AnalysisView {
   return {
     equipmentAnomaly: buildEquipmentAnomaly(data),
+    trends: { air: buildAirTrend(data) },
     filterReplacement: buildFilterReplacement(data),
     yieldCorrelation: buildYieldCorrelation(data),
   }

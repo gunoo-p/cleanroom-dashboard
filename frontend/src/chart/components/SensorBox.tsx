@@ -1,3 +1,4 @@
+// 센서 1종의 현재값·스파크라인·최소/최대/평균을 보여주는 카드.
 import type { SensorMeta, SensorKey } from '../types'
 import { SENSOR_CONFIGS } from '../constants'
 import { StatusPill } from './StatusPill'

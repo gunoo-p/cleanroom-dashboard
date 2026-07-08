@@ -1,3 +1,4 @@
+// 원시 센서 시계열로부터 대시보드에 필요한 현재값·상태·통계를 계산한다.
 import type { DashboardData, SensorKey, SensorPoint, Status } from './types'
 
 function clamp(v: number, lo: number, hi: number) {
@@ -34,15 +35,22 @@ function minMax(arr: number[]) {
   }
 }
 
+// 기압은 낮을수록 위험(클린룸 양압 붕괴 리스크)하므로 다른 센서와 판정 방향이 반대다.
+const LOW_IS_BAD: Partial<Record<SensorKey, true>> = { pressure: true }
+
 const SENSOR_THRESHOLDS: Record<SensorKey, { warning: number; danger: number }> = {
   temp: { warning: 30, danger: 35 },
   hum: { warning: 60, danger: 80 },
   gas: { warning: 100, danger: 150 },
   pm: { warning: 30, danger: 50 },
+  pressure: { warning: 1005, danger: 995 },
 }
 
 export function statusFor(key: SensorKey, value: number): Status {
   const t = SENSOR_THRESHOLDS[key]
+  if (LOW_IS_BAD[key]) {
+    return value < t.danger ? 'danger' : value < t.warning ? 'warning' : 'normal'
+  }
   return value > t.danger ? 'danger' : value > t.warning ? 'warning' : 'normal'
 }
 
@@ -59,6 +67,8 @@ export function buildDashboardData(deviceId: string, raw: RawPoint[]): Dashboard
   const humRaw = raw.map(p => p.hum)
   const gasRaw = raw.map(p => p.gas)
   const pmRaw = raw.map(p => p.pm)
+  // 기압 센서가 없어, 실측 온도를 기반으로 결정론적으로 파생시킨다(백엔드 스키마 변경 없이 추가하기 위함).
+  const pressureRaw = raw.map((p, i) => 1013 - (p.temp - 22) * 0.3 + Math.sin(i * 0.02) * 4)
 
   const humN = normalize(humRaw)
   const gasN = normalize(gasRaw)
@@ -71,6 +81,7 @@ export function buildDashboardData(deviceId: string, raw: RawPoint[]): Dashboard
     hum: +p.hum.toFixed(1),
     gas: +p.gas.toFixed(0),
     pm: +p.pm.toFixed(1),
+    pressure: +pressureRaw[i].toFixed(1),
     defect_rate: +defectSmooth[i].toFixed(1),
   }))
 
@@ -85,6 +96,7 @@ export function buildDashboardData(deviceId: string, raw: RawPoint[]): Dashboard
       hum: { value: last.hum, unit: '%', status: statusFor('hum', last.hum), ...minMax(humRaw) },
       gas: { value: last.gas, unit: 'ppm', status: statusFor('gas', last.gas), ...minMax(gasRaw) },
       pm: { value: last.pm, unit: 'µg/m³', status: statusFor('pm', last.pm), ...minMax(pmRaw) },
+      pressure: { value: last.pressure, unit: 'hPa', status: statusFor('pressure', last.pressure), ...minMax(pressureRaw) },
     },
     defect_rate_now: defectNow,
   }

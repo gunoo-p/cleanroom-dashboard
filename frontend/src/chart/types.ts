@@ -1,3 +1,4 @@
+// 대시보드(차트) 탭에서 쓰는 센서 데이터 타입 정의.
 export type Status = 'normal' | 'warning' | 'danger'
 export type FocusMode = 'sensors' | 'defect'
 export type ChartPeriod = '1d' | '7d' | '30d' | '6m' | '1y'
@@ -8,6 +9,7 @@ export interface SensorPoint {
   hum: number
   gas: number
   pm: number
+  pressure: number
   defect_rate: number
 }
 
@@ -28,6 +30,7 @@ export interface DashboardData {
     hum: SensorMeta
     gas: SensorMeta
     pm: SensorMeta
+    pressure: SensorMeta
   }
   defect_rate_now: number
 }
@@ -38,14 +41,16 @@ export interface NormalizedPoint {
   humN: number
   gasN: number
   pmN: number
+  pressureN: number
   defect_rate: number
   temp: number
   hum: number
   gas: number
   pm: number
+  pressure: number
 }
 
-export type SensorKey = 'temp' | 'hum' | 'gas' | 'pm'
+export type SensorKey = 'temp' | 'hum' | 'gas' | 'pm' | 'pressure'
 
 export interface SensorConfig {
   key: SensorKey

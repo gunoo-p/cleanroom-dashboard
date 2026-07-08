@@ -1,3 +1,4 @@
+// 불량률과 상관관계가 높은 센서 top3와 습도 임계 배너를 보여주는 카드.
 import { Panel } from './Panel'
 import { COLORS } from '../config'
 import type { YieldCorrelationView } from '../deriveAnalysis'

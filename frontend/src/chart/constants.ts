@@ -1,10 +1,12 @@
+// 대시보드 탭의 센서 설정·상태 색상·기간 옵션 등 상수 모음.
 import type { SensorConfig, ChartPeriod } from './types'
 
 export const SENSOR_CONFIGS: SensorConfig[] = [
-  { key: 'temp', label: '온도',    unit: '°C',   color: '#3B82F6' },
-  { key: 'hum',  label: '습도',    unit: '%',    color: '#EC4899' },
-  { key: 'gas',  label: '가스',    unit: 'ppm',  color: '#8B5CF6' },
-  { key: 'pm',   label: '미세입자', unit: 'µg/m³', color: '#14B8A6' },
+  { key: 'temp',     label: '온도',    unit: '°C',   color: '#3B82F6' },
+  { key: 'hum',      label: '습도',    unit: '%',    color: '#EC4899' },
+  { key: 'gas',      label: '가스',    unit: 'ppm',  color: '#8B5CF6' },
+  { key: 'pm',       label: '공기질', unit: 'µg/m³', color: '#14B8A6' },
+  { key: 'pressure', label: '기압',    unit: 'hPa',  color: '#F59E0B' },
 ]
 
 export const DEFECT_COLOR = '#E0473C'

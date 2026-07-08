@@ -1,3 +1,4 @@
+// 정규화된 센서값과 불량률을 함께 보여주는 대시보드 메인 시계열 차트.
 import {
   ComposedChart, Line, Area, XAxis, YAxis,
   Tooltip, ResponsiveContainer, ReferenceLine,
@@ -8,7 +9,7 @@ import { SENSOR_CONFIGS, DEFECT_COLOR } from '../constants'
 interface Props {
   data: NormalizedPoint[]
   focusMode: FocusMode
-  highlightedSensor: SensorKey | null
+  highlightedSensors: SensorKey[]
   isDark: boolean
   period: ChartPeriod
 }
@@ -26,10 +27,11 @@ function formatTime(isoStr: string, period: ChartPeriod = '1d') {
 }
 
 const CHART_KEYS: Record<SensorKey, keyof NormalizedPoint> = {
-  temp: 'tempN',
-  hum:  'humN',
-  gas:  'gasN',
-  pm:   'pmN',
+  temp:     'tempN',
+  hum:      'humN',
+  gas:      'gasN',
+  pm:       'pmN',
+  pressure: 'pressureN',
 }
 
 interface CustomTooltipProps {
@@ -66,7 +68,7 @@ function CustomTooltip({ active, payload, isDark, period }: CustomTooltipProps) 
   )
 }
 
-export function SensorChart({ data, focusMode, highlightedSensor, isDark, period }: Props) {
+export function SensorChart({ data, focusMode, highlightedSensors, isDark, period }: Props) {
   const sensorOpacity = focusMode === 'sensors' ? 1 : 0.16
   const defectOpacity = focusMode === 'defect' ? 1 : 0.3
   const defectStroke = focusMode === 'defect' ? 3 : 1.5
@@ -80,7 +82,7 @@ export function SensorChart({ data, focusMode, highlightedSensor, isDark, period
   const thinned = data.filter((_, i) => i % thinFactor === 0)
 
   const getSensorLineOpacity = (key: SensorKey) => {
-    if (highlightedSensor && highlightedSensor !== key) return sensorOpacity * 0.25
+    if (highlightedSensors.length > 0 && !highlightedSensors.includes(key)) return sensorOpacity * 0.25
     return sensorOpacity
   }
 
@@ -111,7 +113,7 @@ export function SensorChart({ data, focusMode, highlightedSensor, isDark, period
           content={(props) => (
             <CustomTooltip
               active={props.active}
-              payload={props.payload as Array<{ payload: NormalizedPoint }>}
+              payload={props.payload as unknown as Array<{ payload: NormalizedPoint }>}
               isDark={isDark}
               period={period}
             />

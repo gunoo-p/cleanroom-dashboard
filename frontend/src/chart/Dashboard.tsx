@@ -1,30 +1,26 @@
+// 대시보드(차트) 탭의 메인 컴포넌트: 실시간 센서값·시계열 차트·구역 선택을 조합한다.
 import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import type { DashboardData, FocusMode, SensorKey, ChartPeriod } from './types'
 import { generateMockData } from './mockData'
 import { normalizeSeries } from './normalize'
 import { buildDashboardData, statusFor, type RawPoint } from './deriveDashboard'
-import { PERIOD_OPTIONS, type PeriodOption } from './constants'
+import { PERIOD_OPTIONS, SENSOR_CONFIGS, type PeriodOption } from './constants'
 import { Header } from './components/Header'
 import { SensorBox } from './components/SensorBox'
 import { SensorChart } from './components/SensorChart'
 import { PeriodSelector } from './components/PeriodSelector'
+import { ZoneSelector } from '../shared/ZoneSelector'
+import { zoneDeviceId, type Zone } from '../shared/zone'
 
-const FALLBACK_DEVICE_ID = 'esp32-A1'
-
-async function fetchDevices(): Promise<string[]> {
-  const res = await fetch('/api/devices')
-  if (!res.ok) throw new Error('API error')
-  return res.json()
-}
-
-const mockCache = new Map<ChartPeriod, DashboardData>()
-function getMockData(period: ChartPeriod): DashboardData {
-  if (!mockCache.has(period)) {
+const mockCache = new Map<string, DashboardData>()
+function getMockData(period: ChartPeriod, zone: Zone): DashboardData {
+  const key = `${zone}-${period}`
+  if (!mockCache.has(key)) {
     const option = PERIOD_OPTIONS.find(o => o.key === period)!
-    mockCache.set(period, generateMockData(option))
+    mockCache.set(key, generateMockData(option, zone))
   }
-  return mockCache.get(period)!
+  return mockCache.get(key)!
 }
 
 interface HistoryRow {
@@ -87,23 +83,18 @@ async function fetchLatest(deviceId: string): Promise<LiveReading> {
 interface DashboardProps {
   isDark: boolean
   onToggleDark: () => void
+  zone: Zone
+  onZoneChange: (zone: Zone) => void
 }
 
-export function Dashboard({ isDark, onToggleDark }: DashboardProps) {
+export function Dashboard({ isDark, onToggleDark, zone, onZoneChange }: DashboardProps) {
   const [focusMode, setFocusMode] = useState<FocusMode>('sensors')
-  const [highlightedSensor, setHighlightedSensor] = useState<SensorKey | null>(null)
+  const [highlightedSensors, setHighlightedSensors] = useState<SensorKey[]>([])
   const [period, setPeriod] = useState<ChartPeriod>('1d')
 
   const periodOption = PERIOD_OPTIONS.find(o => o.key === period)!
-  const fallbackData = getMockData(period)
-
-  const { data: devices } = useQuery<string[]>({
-    queryKey: ['devices'],
-    queryFn: fetchDevices,
-    refetchInterval: 30_000,
-    retry: false,
-  })
-  const deviceId = devices?.[0] ?? FALLBACK_DEVICE_ID
+  const fallbackData = getMockData(period, zone)
+  const deviceId = zoneDeviceId(zone)
 
   const { data: current = fallbackData } = useQuery<DashboardData>({
     queryKey: ['dashboard', deviceId, period],
@@ -124,12 +115,13 @@ export function Dashboard({ isDark, onToggleDark }: DashboardProps) {
 
   const liveCurrent = useMemo(() => {
     if (!live) return current.current
-    const merge = (key: SensorKey) => ({
+    const merge = (key: keyof LiveReading) => ({
       ...current.current[key],
       value: +live[key].toFixed(key === 'gas' ? 0 : 1),
       status: statusFor(key, live[key]),
     })
-    return { temp: merge('temp'), hum: merge('hum'), gas: merge('gas'), pm: merge('pm') }
+    // 기압은 실시간(/latest) 백엔드 응답에 없는 파생값이라 느린 쿼리의 값을 그대로 둔다.
+    return { temp: merge('temp'), hum: merge('hum'), gas: merge('gas'), pm: merge('pm'), pressure: current.current.pressure }
   }, [current.current, live])
 
   const normalized = useMemo(() => normalizeSeries(current.points), [current.points])
@@ -138,7 +130,9 @@ export function Dashboard({ isDark, onToggleDark }: DashboardProps) {
     current.points.slice(-48).map(p => p[key])
 
   const handleSensorClick = (key: SensorKey) => {
-    setHighlightedSensor(prev => prev === key ? null : key)
+    setHighlightedSensors(prev =>
+      prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
+    )
   }
 
   const bg = isDark ? '#0f172a' : '#f8fafc'
@@ -154,6 +148,10 @@ export function Dashboard({ isDark, onToggleDark }: DashboardProps) {
       boxSizing: 'border-box',
       transition: 'background 0.3s, color 0.3s',
     }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: 12 }}>
+        <ZoneSelector value={zone} onChange={onZoneChange} isDark={isDark} />
+      </div>
+
       <Header
         defectRate={current.defect_rate_now}
         focusMode={focusMode}
@@ -175,13 +173,13 @@ export function Dashboard({ isDark, onToggleDark }: DashboardProps) {
       >
         {/* 좌측: 온도·습도·가스·미세입자 */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {(['temp', 'hum', 'gas', 'pm'] as SensorKey[]).map(key => (
+          {SENSOR_CONFIGS.map(cfg => (
             <SensorBox
-              key={key}
-              sensorKey={key}
-              meta={liveCurrent[key]}
-              sparkData={sparkData(key)}
-              highlighted={highlightedSensor === null || highlightedSensor === key}
+              key={cfg.key}
+              sensorKey={cfg.key}
+              meta={liveCurrent[cfg.key]}
+              sparkData={sparkData(cfg.key)}
+              highlighted={highlightedSensors.length === 0 || highlightedSensors.includes(cfg.key)}
               onClick={handleSensorClick}
               isDark={isDark}
             />
@@ -202,7 +200,7 @@ export function Dashboard({ isDark, onToggleDark }: DashboardProps) {
             <SensorChart
               data={normalized}
               focusMode={focusMode}
-              highlightedSensor={highlightedSensor}
+              highlightedSensors={highlightedSensors}
               isDark={isDark}
               period={period}
             />
@@ -221,7 +219,7 @@ export function Dashboard({ isDark, onToggleDark }: DashboardProps) {
         <span>·</span>
         <span>점선: 불량률 선</span>
         <span>·</span>
-        <span>클릭: 항목 강조 / 재클릭: 해제</span>
+        <span>클릭: 항목 강조(여러 개 선택 가능) / 재클릭: 해제</span>
       </div>
     </div>
   )
