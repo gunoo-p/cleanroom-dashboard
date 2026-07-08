@@ -72,7 +72,7 @@ export function HumidityDefectScatterPanel({ data, isDark }: Props) {
             tickLine={false}
           />
           <Tooltip
-            formatter={(value: number, name: string) => [`${value.toFixed(1)}${name === '습도' ? '%' : '%'}`, name]}
+            formatter={(value, name) => [`${Number(value).toFixed(1)}%`, name]}
             contentStyle={{ background: tooltipBg, border: `1px solid ${gridColor}`, fontSize: '0.75rem' }}
             cursor={{ strokeDasharray: '3 3' }}
           />

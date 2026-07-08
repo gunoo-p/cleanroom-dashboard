@@ -113,7 +113,7 @@ export function SensorChart({ data, focusMode, highlightedSensors, isDark, perio
           content={(props) => (
             <CustomTooltip
               active={props.active}
-              payload={props.payload as Array<{ payload: NormalizedPoint }>}
+              payload={props.payload as unknown as Array<{ payload: NormalizedPoint }>}
               isDark={isDark}
               period={period}
             />

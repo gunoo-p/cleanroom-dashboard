@@ -5,7 +5,7 @@ import type { DashboardData, FocusMode, SensorKey, ChartPeriod } from './types'
 import { generateMockData } from './mockData'
 import { normalizeSeries } from './normalize'
 import { buildDashboardData, statusFor, type RawPoint } from './deriveDashboard'
-import { PERIOD_OPTIONS, type PeriodOption } from './constants'
+import { PERIOD_OPTIONS, SENSOR_CONFIGS, type PeriodOption } from './constants'
 import { Header } from './components/Header'
 import { SensorBox } from './components/SensorBox'
 import { SensorChart } from './components/SensorChart'
@@ -173,13 +173,13 @@ export function Dashboard({ isDark, onToggleDark, zone, onZoneChange }: Dashboar
       >
         {/* 좌측: 온도·습도·가스·미세입자 */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {(['temp', 'hum', 'gas', 'pm', 'pressure'] as SensorKey[]).map(key => (
+          {SENSOR_CONFIGS.map(cfg => (
             <SensorBox
-              key={key}
-              sensorKey={key}
-              meta={liveCurrent[key]}
-              sparkData={sparkData(key)}
-              highlighted={highlightedSensors.length === 0 || highlightedSensors.includes(key)}
+              key={cfg.key}
+              sensorKey={cfg.key}
+              meta={liveCurrent[cfg.key]}
+              sparkData={sparkData(cfg.key)}
+              highlighted={highlightedSensors.length === 0 || highlightedSensors.includes(cfg.key)}
               onClick={handleSensorClick}
               isDark={isDark}
             />

@@ -37,8 +37,8 @@ export function DpTrendPanel({ daily, isDark }: Props) {
           />
           <YAxis domain={[0, THRESHOLDS.dp.axisMax]} tick={{ fontSize: 10, fill: axisColor }} axisLine={false} tickLine={false} />
           <Tooltip
-            labelFormatter={(d: number) => `${d}일${d === todayDay ? ' (오늘)' : ''}`}
-            formatter={(value: number, name: string) => value == null ? ['-', name] : [`${value.toFixed(1)}${LABELS.dp.unit}`, name === 'value' ? '실측 평균' : '추세']}
+            labelFormatter={(label) => { const d = Number(label); return `${d}일${d === todayDay ? ' (오늘)' : ''}` }}
+            formatter={(value, name) => value == null ? ['-', name] : [`${Number(value).toFixed(1)}${LABELS.dp.unit}`, name === 'value' ? '실측 평균' : '추세']}
             contentStyle={{ background: tooltipBg, border: `1px solid ${gridColor}`, fontSize: '0.75rem' }}
           />
 

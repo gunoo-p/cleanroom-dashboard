@@ -60,8 +60,8 @@ export function TrendPanel({ title, unit, data, isDark, rawColor, maColor, warni
             tickLine={false}
           />
           <Tooltip
-            labelFormatter={formatHour}
-            formatter={(value: number, name: string) => [`${value.toFixed(1)}${unit}`, name === 'raw' ? '실측' : '이동평균']}
+            labelFormatter={(label) => formatHour(String(label))}
+            formatter={(value, name) => [`${Number(value).toFixed(1)}${unit}`, name === 'raw' ? '실측' : '이동평균']}
             contentStyle={{ background: tooltipBg, border: `1px solid ${gridColor}`, fontSize: '0.75rem' }}
           />
 
