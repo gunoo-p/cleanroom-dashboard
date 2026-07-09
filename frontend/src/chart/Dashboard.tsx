@@ -2,7 +2,6 @@
 import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import type { DashboardData, FocusMode, SensorKey, ChartPeriod } from './types'
-import { generateMockData } from './mockData'
 import { normalizeSeries } from './normalize'
 import { buildDashboardData, statusFor, type RawPoint } from './deriveDashboard'
 import { PERIOD_OPTIONS, SENSOR_CONFIGS, type PeriodOption } from './constants'
@@ -13,22 +12,13 @@ import { PeriodSelector } from './components/PeriodSelector'
 import { ZoneSelector } from '../shared/ZoneSelector'
 import { zoneDeviceId, type Zone } from '../shared/zone'
 
-const mockCache = new Map<string, DashboardData>()
-function getMockData(period: ChartPeriod, zone: Zone): DashboardData {
-  const key = `${zone}-${period}`
-  if (!mockCache.has(key)) {
-    const option = PERIOD_OPTIONS.find(o => o.key === period)!
-    mockCache.set(key, generateMockData(option, zone))
-  }
-  return mockCache.get(key)!
-}
-
 interface HistoryRow {
   time: string
   temperature: number | null
   humidity: number | null
-  pm25: number | null
+  pressure: number | null
   gas: number | null
+  air_quality: number | null
 }
 
 async function fetchDashboard(deviceId: string, option: PeriodOption): Promise<DashboardData> {
@@ -47,9 +37,9 @@ async function fetchDashboard(deviceId: string, option: PeriodOption): Promise<D
   const rows: HistoryRow[] = await res.json()
 
   const raw: RawPoint[] = rows
-    .filter((r): r is HistoryRow & Record<'temperature' | 'humidity' | 'pm25' | 'gas', number> =>
-      r.temperature != null && r.humidity != null && r.pm25 != null && r.gas != null)
-    .map(r => ({ t: r.time, temp: r.temperature, hum: r.humidity, gas: r.gas, pm: r.pm25 }))
+    .filter((r): r is HistoryRow & Record<'temperature' | 'humidity' | 'pressure' | 'gas' | 'air_quality', number> =>
+      r.temperature != null && r.humidity != null && r.pressure != null && r.gas != null && r.air_quality != null)
+    .map(r => ({ t: r.time, temp: r.temperature, hum: r.humidity, gas: r.gas, pm: r.air_quality, pressure: r.pressure }))
 
   if (raw.length === 0) throw new Error('no data')
 
@@ -59,8 +49,9 @@ async function fetchDashboard(deviceId: string, option: PeriodOption): Promise<D
 interface LatestRow {
   temperature: number | null
   humidity: number | null
-  pm25: number | null
+  pressure: number | null
   gas: number | null
+  air_quality: number | null
 }
 
 interface LiveReading {
@@ -68,16 +59,17 @@ interface LiveReading {
   hum: number
   gas: number
   pm: number
+  pressure: number
 }
 
 async function fetchLatest(deviceId: string): Promise<LiveReading> {
   const res = await fetch(`/api/sensors/${deviceId}/latest`)
   if (!res.ok) throw new Error('API error')
   const row: LatestRow = await res.json()
-  if (row.temperature == null || row.humidity == null || row.pm25 == null || row.gas == null) {
+  if (row.temperature == null || row.humidity == null || row.pressure == null || row.gas == null || row.air_quality == null) {
     throw new Error('incomplete data')
   }
-  return { temp: row.temperature, hum: row.humidity, gas: row.gas, pm: row.pm25 }
+  return { temp: row.temperature, hum: row.humidity, gas: row.gas, pm: row.air_quality, pressure: row.pressure }
 }
 
 interface DashboardProps {
@@ -93,15 +85,13 @@ export function Dashboard({ isDark, onToggleDark, zone, onZoneChange }: Dashboar
   const [period, setPeriod] = useState<ChartPeriod>('1d')
 
   const periodOption = PERIOD_OPTIONS.find(o => o.key === period)!
-  const fallbackData = getMockData(period, zone)
   const deviceId = zoneDeviceId(zone)
 
-  const { data: current = fallbackData } = useQuery<DashboardData>({
+  const { data: current, isError } = useQuery<DashboardData>({
     queryKey: ['dashboard', deviceId, period],
     queryFn: () => fetchDashboard(deviceId, periodOption),
     refetchInterval: 10_000,
     retry: false,
-    placeholderData: fallbackData,
   })
 
   // 차트(시계열)는 위 쿼리로 느긋하게 갱신하고, 상단 실시간 수치만 짧은 주기로 따로 폴링한다.
@@ -111,23 +101,24 @@ export function Dashboard({ isDark, onToggleDark, zone, onZoneChange }: Dashboar
     queryFn: () => fetchLatest(deviceId),
     refetchInterval: 3_000,
     retry: false,
+    enabled: current != null,
   })
 
   const liveCurrent = useMemo(() => {
+    if (!current) return null
     if (!live) return current.current
     const merge = (key: keyof LiveReading) => ({
       ...current.current[key],
       value: +live[key].toFixed(key === 'gas' ? 0 : 1),
       status: statusFor(key, live[key]),
     })
-    // 기압은 실시간(/latest) 백엔드 응답에 없는 파생값이라 느린 쿼리의 값을 그대로 둔다.
-    return { temp: merge('temp'), hum: merge('hum'), gas: merge('gas'), pm: merge('pm'), pressure: current.current.pressure }
-  }, [current.current, live])
+    return { temp: merge('temp'), hum: merge('hum'), gas: merge('gas'), pm: merge('pm'), pressure: merge('pressure') }
+  }, [current, live])
 
-  const normalized = useMemo(() => normalizeSeries(current.points), [current.points])
+  const normalized = useMemo(() => current ? normalizeSeries(current.points) : [], [current])
 
   const sparkData = (key: SensorKey) =>
-    current.points.slice(-48).map(p => p[key])
+    current ? current.points.slice(-48).map(p => p[key]) : []
 
   const handleSensorClick = (key: SensorKey) => {
     setHighlightedSensors(prev =>
@@ -137,6 +128,7 @@ export function Dashboard({ isDark, onToggleDark, zone, onZoneChange }: Dashboar
 
   const bg = isDark ? '#0f172a' : '#f8fafc'
   const cardBg = isDark ? '#1e293b' : '#ffffff'
+  const textMuted = isDark ? '#64748b' : '#94a3b8'
 
   return (
     <div style={{
@@ -152,6 +144,16 @@ export function Dashboard({ isDark, onToggleDark, zone, onZoneChange }: Dashboar
         <ZoneSelector value={zone} onChange={onZoneChange} isDark={isDark} />
       </div>
 
+      {!current || !liveCurrent ? (
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          height: '60vh', color: textMuted, fontSize: '0.95rem', flexDirection: 'column', gap: 8,
+        }}>
+          <span>{isError ? '⚠ 연결 실패' : '불러오는 중...'}</span>
+          {isError && <span style={{ fontSize: '0.78rem' }}>{deviceId} 장치의 데이터를 가져올 수 없습니다.</span>}
+        </div>
+      ) : (
+      <>
       <Header
         defectRate={current.defect_rate_now}
         focusMode={focusMode}
@@ -221,6 +223,8 @@ export function Dashboard({ isDark, onToggleDark, zone, onZoneChange }: Dashboar
         <span>·</span>
         <span>클릭: 항목 강조(여러 개 선택 가능) / 재클릭: 해제</span>
       </div>
+      </>
+      )}
     </div>
   )
 }

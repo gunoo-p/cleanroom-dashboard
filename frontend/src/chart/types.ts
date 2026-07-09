@@ -1,5 +1,5 @@
 // 대시보드(차트) 탭에서 쓰는 센서 데이터 타입 정의.
-export type Status = 'normal' | 'warning' | 'danger'
+export type Status = 'normal' | 'caution' | 'warning' | 'danger'
 export type FocusMode = 'sensors' | 'defect'
 export type ChartPeriod = '1d' | '7d' | '30d' | '6m' | '1y'
 

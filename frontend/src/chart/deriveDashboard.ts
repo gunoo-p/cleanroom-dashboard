@@ -38,16 +38,31 @@ function minMax(arr: number[]) {
 // 기압은 낮을수록 위험(클린룸 양압 붕괴 리스크)하므로 다른 센서와 판정 방향이 반대다.
 const LOW_IS_BAD: Partial<Record<SensorKey, true>> = { pressure: true }
 
-const SENSOR_THRESHOLDS: Record<SensorKey, { warning: number; danger: number }> = {
-  temp: { warning: 30, danger: 35 },
-  hum: { warning: 60, danger: 80 },
-  gas: { warning: 100, danger: 150 },
-  pm: { warning: 30, danger: 50 },
+// 온도/습도: 반도체 클린룸 실측 기준(중심값 ± 이탈폭, airinnovations.com 참고)으로 4단계 판정.
+// 정상: 22.0±0.5℃/45%±2%RH, 주의: ±1℃/±5%RH, 경고: ±2℃/±10%RH, 중단(웨이퍼 파손·ESD 위험): 그 이상.
+const DEVIATION_THRESHOLDS: Partial<Record<SensorKey, { center: number; caution: number; warning: number; danger: number }>> = {
+  temp: { center: 22.0, caution: 0.5, warning: 1.0, danger: 2.0 },
+  hum: { center: 45, caution: 2, warning: 5, danger: 10 },
+}
+
+// gas(MQ-2)·pm(MQ135, 공기질)은 보정 안 된 raw ADC값(0~4095)이라 임시 기준치.
+// 실측 캘리브레이션 끝나면 조정 필요. 기압도 아직 신뢰할 기준을 못 찾아 기존 값 유지.
+const DIRECT_THRESHOLDS: Partial<Record<SensorKey, { warning: number; danger: number }>> = {
+  gas: { warning: 2000, danger: 3000 },
+  pm: { warning: 2000, danger: 3000 },
   pressure: { warning: 1005, danger: 995 },
 }
 
 export function statusFor(key: SensorKey, value: number): Status {
-  const t = SENSOR_THRESHOLDS[key]
+  const dev = DEVIATION_THRESHOLDS[key]
+  if (dev) {
+    const d = Math.abs(value - dev.center)
+    if (d > dev.danger) return 'danger'
+    if (d > dev.warning) return 'warning'
+    if (d > dev.caution) return 'caution'
+    return 'normal'
+  }
+  const t = DIRECT_THRESHOLDS[key]!
   if (LOW_IS_BAD[key]) {
     return value < t.danger ? 'danger' : value < t.warning ? 'warning' : 'normal'
   }
@@ -60,6 +75,7 @@ export interface RawPoint {
   hum: number
   gas: number
   pm: number
+  pressure: number
 }
 
 export function buildDashboardData(deviceId: string, raw: RawPoint[]): DashboardData {
@@ -67,8 +83,7 @@ export function buildDashboardData(deviceId: string, raw: RawPoint[]): Dashboard
   const humRaw = raw.map(p => p.hum)
   const gasRaw = raw.map(p => p.gas)
   const pmRaw = raw.map(p => p.pm)
-  // 기압 센서가 없어, 실측 온도를 기반으로 결정론적으로 파생시킨다(백엔드 스키마 변경 없이 추가하기 위함).
-  const pressureRaw = raw.map((p, i) => 1013 - (p.temp - 22) * 0.3 + Math.sin(i * 0.02) * 4)
+  const pressureRaw = raw.map(p => p.pressure)
 
   const humN = normalize(humRaw)
   const gasN = normalize(gasRaw)
@@ -94,8 +109,8 @@ export function buildDashboardData(deviceId: string, raw: RawPoint[]): Dashboard
     current: {
       temp: { value: last.temp, unit: '°C', status: statusFor('temp', last.temp), ...minMax(tempRaw) },
       hum: { value: last.hum, unit: '%', status: statusFor('hum', last.hum), ...minMax(humRaw) },
-      gas: { value: last.gas, unit: 'ppm', status: statusFor('gas', last.gas), ...minMax(gasRaw) },
-      pm: { value: last.pm, unit: 'µg/m³', status: statusFor('pm', last.pm), ...minMax(pmRaw) },
+      gas: { value: last.gas, unit: '', status: statusFor('gas', last.gas), ...minMax(gasRaw) },
+      pm: { value: last.pm, unit: '', status: statusFor('pm', last.pm), ...minMax(pmRaw) },
       pressure: { value: last.pressure, unit: 'hPa', status: statusFor('pressure', last.pressure), ...minMax(pressureRaw) },
     },
     defect_rate_now: defectNow,

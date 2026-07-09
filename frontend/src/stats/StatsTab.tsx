@@ -1,16 +1,13 @@
-// 통계(분석) 탭의 메인 컴포넌트: 설비 이상·공기질/필터 교체 예측·수율 상관관계 행을 조합한다.
+// 통계(분석) 탭의 메인 컴포넌트: 설비 이상·공기질 추세·수율 상관관계 행을 조합한다.
 import { useMemo, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import type { TabProps } from '../tabs'
 import type { AnalysisData } from './types'
 import { fetchAnalysis } from './api'
-import { generateAnalysisMockData } from './mockData'
 import { deriveAnalysis } from './deriveAnalysis'
 import { THRESHOLDS, LABELS, COLORS } from './config'
 import { TrendPanel } from './components/TrendPanel'
 import { EquipmentAnomalyCard } from './components/EquipmentAnomalyCard'
-import { DpTrendPanel } from './components/DpTrendPanel'
-import { FilterReplacementCard } from './components/FilterReplacementCard'
 import { HumidityDefectScatterPanel } from './components/HumidityDefectScatterPanel'
 import { CorrelationHeatmap } from './components/CorrelationHeatmap'
 import { YieldCorrelationCard } from './components/YieldCorrelationCard'
@@ -26,18 +23,16 @@ function AnalysisRow({ children }: { children: ReactNode }) {
 }
 
 export function StatsTab({ isDark, zone, onZoneChange }: TabProps) {
-  const fallbackData = useMemo(() => generateAnalysisMockData(zone), [zone])
   const deviceId = zoneDeviceId(zone)
 
-  const { data: current = fallbackData } = useQuery<AnalysisData>({
+  const { data: current, isError } = useQuery<AnalysisData>({
     queryKey: ['analysis', deviceId],
     queryFn: () => fetchAnalysis(deviceId),
     refetchInterval: 60_000,
     retry: false,
-    placeholderData: fallbackData,
   })
 
-  const view = useMemo(() => deriveAnalysis(current), [current])
+  const view = useMemo(() => current ? deriveAnalysis(current) : null, [current])
 
   const bg = isDark ? '#0f172a' : '#f8fafc'
   const textMuted = isDark ? '#64748b' : '#94a3b8'
@@ -58,10 +53,20 @@ export function StatsTab({ isDark, zone, onZoneChange }: TabProps) {
       <div style={{ marginBottom: 16 }}>
         <div style={{ fontSize: '1.25rem', fontWeight: 800 }}>{LABELS.title}</div>
         <div style={{ fontSize: '0.78rem', color: textMuted, marginTop: 2 }}>
-          {current.device_id} · {LABELS.subtitle}
+          {current ? `${current.device_id} · ` : ''}{LABELS.subtitle}
         </div>
       </div>
 
+      {!current || !view ? (
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          height: '50vh', color: textMuted, fontSize: '0.95rem', flexDirection: 'column', gap: 8,
+        }}>
+          <span>{isError ? '⚠ 연결 실패' : '불러오는 중...'}</span>
+          {isError && <span style={{ fontSize: '0.78rem' }}>{deviceId} 장치의 데이터를 가져올 수 없습니다.</span>}
+        </div>
+      ) : (
+      <>
       {/* 행 1: 설비 이상 예측 */}
       <AnalysisRow>
         <TrendPanel
@@ -79,7 +84,7 @@ export function StatsTab({ isDark, zone, onZoneChange }: TabProps) {
         />
         <TrendPanel
           title="가스 농도 이동평균 추세"
-          unit="ppm"
+          unit=""
           data={view.equipmentAnomaly.gas}
           isDark={isDark}
           rawColor={COLORS.gasRaw}
@@ -93,10 +98,10 @@ export function StatsTab({ isDark, zone, onZoneChange }: TabProps) {
         <EquipmentAnomalyCard data={view.equipmentAnomaly} isDark={isDark} />
       </AnalysisRow>
 
-      {/* 행 2: 공기질 추세 · 필터 교체 예측(신호원: 차압, 데모) */}
-      <AnalysisRow>
+      {/* 행 2: 공기질 추세 */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 16, marginBottom: 16 }}>
         <TrendPanel
-          title="① 공기질 이동평균 추세"
+          title="공기질 이동평균 추세"
           unit={LABELS.air.unit}
           data={view.trends.air}
           isDark={isDark}
@@ -108,9 +113,7 @@ export function StatsTab({ isDark, zone, onZoneChange }: TabProps) {
           axisMax={THRESHOLDS.air.axisMax}
           risingLabel="상승 추세 감지"
         />
-        <DpTrendPanel daily={view.filterReplacement.daily} isDark={isDark} />
-        <FilterReplacementCard data={view.filterReplacement} isDark={isDark} />
-      </AnalysisRow>
+      </div>
 
       {/* 행 3: 수율 상관관계 */}
       <AnalysisRow>
@@ -118,6 +121,8 @@ export function StatsTab({ isDark, zone, onZoneChange }: TabProps) {
         <CorrelationHeatmap matrix={view.yieldCorrelation.matrix} isDark={isDark} />
         <YieldCorrelationCard data={view.yieldCorrelation} isDark={isDark} />
       </AnalysisRow>
+      </>
+      )}
     </div>
   )
 }
