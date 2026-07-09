@@ -79,7 +79,7 @@ DB 스키마(`infra/Init.sql`): `sensor_data(time, device_id, temperature, humid
 - **공기질 추세**: 같은 로직을 MQ135(공기질)에 적용.
 - **수율 상관관계**: 습도-불량률 산점도+회귀선, 5개 센서 상관계수 히트맵, 불량률 상관 Top3. (원래 있던 "필터 교체 예측" 카드는 근거 데이터가 없어져 제거됨)
 
-이 탭을 만들 때 쓴 원 설계 프롬프트는 [`frontend/analysis.md`](frontend/analysis.md)에 남아있다.
+각 패널의 계산법·예측 근거(왜 이 지표를 보는가)·신빙성(실측 검증된 것 vs 아직 가정인 것)은 [`frontend/analysis.md`](frontend/analysis.md)에 정리되어 있다.
 
 ## 참고자료
 
