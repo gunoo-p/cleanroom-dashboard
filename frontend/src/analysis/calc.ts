@@ -44,17 +44,10 @@ export function pearsonCorrelation(xs: number[], ys: number[]): number {
 }
 
 // 현재값이 rate(단위/시간 또는 단위/일) 속도로 threshold에 도달하기까지 걸리는 시간.
-// 도달하지 않는 방향(rate<=0)이면 null("해당 없음")을 반환한다.
+// threshold가 현재값보다 높든 낮든(예: 기압처럼 낮을수록 위험한 경우) 방향에 상관없이 계산하고,
+// 그 방향으로 가고 있지 않으면(eta<=0) null("해당 없음")을 반환한다.
 export function etaToThreshold(current: number, threshold: number, rate: number): number | null {
-  if (rate <= 0) return null
+  if (rate === 0) return null
   const eta = (threshold - current) / rate
   return eta > 0 ? eta : null
-}
-
-export function mean(values: number[]): number {
-  return values.length === 0 ? 0 : values.reduce((s, v) => s + v, 0) / values.length
-}
-
-export function clamp(v: number, lo: number, hi: number): number {
-  return Math.max(lo, Math.min(hi, v))
 }
