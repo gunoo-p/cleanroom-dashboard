@@ -1,3 +1,4 @@
+// 차트 조회 기간(1일/1주일/1개월/6개월/1년) 선택 버튼 그룹.
 import type { ChartPeriod } from '../types'
 import { PERIOD_OPTIONS } from '../constants'
 

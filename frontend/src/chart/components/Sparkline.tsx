@@ -1,3 +1,4 @@
+// SensorBox 안에 들어가는 작은 추이 미니 차트.
 import { LineChart, Line, ResponsiveContainer } from 'recharts'
 
 interface Props {

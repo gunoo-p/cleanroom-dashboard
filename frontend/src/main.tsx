@@ -1,3 +1,4 @@
+// 앱 진입점: React Query 프로바이더로 감싸 AppShell을 렌더링한다.
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'

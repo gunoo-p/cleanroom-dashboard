@@ -6,7 +6,7 @@ services:
       POSTGRES_PASSWORD: password
       POSTGRES_DB: sensordb
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - timescale_data:/var/lib/postgresql/data
       - ./infra/init.sql:/docker-entrypoint-initdb.d/init.sql
@@ -14,18 +14,28 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "6379:6379"
+      - "6380:6379"
+
+  mosquitto:
+    image: eclipse-mosquitto:2
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./infra/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf
 
   ingestion:
     build: ./services/ingestion
     environment:
       DB_URL: postgresql://admin:password@timescaledb:5432/sensordb
       REDIS_URL: redis://redis:6379
+      MQTT_HOST: mosquitto
+      MQTT_PORT: "1883"
     ports:
       - "8001:8000"
     depends_on:
       - timescaledb
       - redis
+      - mosquitto
 
   query:
     build: ./services/query

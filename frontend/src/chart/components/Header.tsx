@@ -1,3 +1,4 @@
+// 대시보드 상단 헤더: 현재 불량률 요약·측정값/불량률 토글·다크모드 버튼.
 import type { FocusMode } from '../types'
 import { DEFECT_COLOR } from '../constants'
 
