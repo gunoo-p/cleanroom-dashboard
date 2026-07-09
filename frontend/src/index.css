@@ -14,17 +14,6 @@ body {
   .stats-row {
     grid-template-columns: 1fr !important;
   }
-
-  .dashboard-grid {
-    grid-template-columns: 1fr !important;
-    grid-template-rows: auto auto !important;
-  }
-  .dashboard-grid > *:nth-child(2) {
-    grid-row: 1;
-  }
-  .dashboard-grid > *:nth-child(1) {
-    grid-row: 2;
-  }
 }
 
 /* 모바일: 사이드바를 오버레이로 변경 */
@@ -36,15 +25,5 @@ body {
     height: 100vh;
     z-index: 100;
     box-shadow: 4px 0 16px rgba(0, 0, 0, 0.15);
-  }
-}
-
-@media (max-width: 560px) {
-  .dashboard-grid {
-    grid-template-columns: 1fr !important;
-  }
-  .dashboard-grid > * {
-    grid-column: 1 !important;
-    grid-row: auto !important;
   }
 }

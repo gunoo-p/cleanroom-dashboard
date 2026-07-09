@@ -163,52 +163,46 @@ export function Dashboard({ isDark, onToggleDark, zone, onZoneChange }: Dashboar
         deviceId={current.device_id}
       />
 
-      {/* 2열 레이아웃 */}
+      {/* 센서값 5개: 차트 위에 가로로 배열(좁아지면 자동 줄바꿈) */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'minmax(160px,220px) 1fr',
-        gridTemplateRows: 'auto',
-        gap: 16,
-        alignItems: 'stretch',
-      }}
-        className="dashboard-grid"
-      >
-        {/* 좌측: 온도·습도·가스·미세입자 */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {SENSOR_CONFIGS.map(cfg => (
-            <SensorBox
-              key={cfg.key}
-              sensorKey={cfg.key}
-              meta={liveCurrent[cfg.key]}
-              sparkData={sparkData(cfg.key)}
-              highlighted={highlightedSensors.length === 0 || highlightedSensors.includes(cfg.key)}
-              onClick={handleSensorClick}
-              isDark={isDark}
-            />
-          ))}
-        </div>
+        gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+        gap: 12,
+        marginBottom: 16,
+      }}>
+        {SENSOR_CONFIGS.map(cfg => (
+          <SensorBox
+            key={cfg.key}
+            sensorKey={cfg.key}
+            meta={liveCurrent[cfg.key]}
+            sparkData={sparkData(cfg.key)}
+            highlighted={highlightedSensors.length === 0 || highlightedSensors.includes(cfg.key)}
+            onClick={handleSensorClick}
+            isDark={isDark}
+          />
+        ))}
+      </div>
 
-        {/* 중앙 차트 */}
-        <div style={{
-          background: cardBg,
-          borderRadius: 12,
-          padding: '16px 8px 4px 0',
-          height: 420,
-          border: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`,
-          display: 'flex',
-          flexDirection: 'column',
-        }}>
-          <div style={{ flex: 1, minHeight: 0 }}>
-            <SensorChart
-              data={normalized}
-              focusMode={focusMode}
-              highlightedSensors={highlightedSensors}
-              isDark={isDark}
-              period={period}
-            />
-          </div>
-          <PeriodSelector value={period} onChange={setPeriod} isDark={isDark} />
+      {/* 차트 */}
+      <div style={{
+        background: cardBg,
+        borderRadius: 12,
+        padding: '16px 8px 4px 0',
+        height: 420,
+        border: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`,
+        display: 'flex',
+        flexDirection: 'column',
+      }}>
+        <div style={{ flex: 1, minHeight: 0 }}>
+          <SensorChart
+            data={normalized}
+            focusMode={focusMode}
+            highlightedSensors={highlightedSensors}
+            isDark={isDark}
+            period={period}
+          />
         </div>
+        <PeriodSelector value={period} onChange={setPeriod} isDark={isDark} />
       </div>
 
       {/* 범례 */}
