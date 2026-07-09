@@ -29,7 +29,7 @@ export function CorrelationHeatmap({ matrix, isDark }: Props) {
   const textMuted = isDark ? '#94a3b8' : '#64748b'
 
   return (
-    <Panel title="센서-불량률 상관계수 매트릭스" isDark={isDark}>
+    <Panel title="센서 간 상관계수 매트릭스" isDark={isDark}>
       <div style={{ display: 'flex', gap: 12, height: '100%' }}>
         {/* 셀 높이는 컬럼 폭에서 파생되는 aspect-ratio 대신, 부모 높이를 벗어날 수 없는
             grid의 1fr 행으로 고정한다(브라우저 확대/축소 배율에 따라 aspect-ratio 반올림이

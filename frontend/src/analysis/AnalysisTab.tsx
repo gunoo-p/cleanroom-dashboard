@@ -1,4 +1,4 @@
-// 통계(분석) 탭의 메인 컴포넌트: 설비 이상·공기질 추세·수율 상관관계 행을 조합한다.
+// 통계(분석) 탭의 메인 컴포넌트: 설비 이상·공기질 추세·환경 안정성(기압/상관관계) 행을 조합한다.
 import { useMemo, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import type { TabProps } from '../tabs'
@@ -8,9 +8,7 @@ import { deriveAnalysis } from './deriveAnalysis'
 import { THRESHOLDS, LABELS, COLORS } from './config'
 import { TrendPanel } from './components/TrendPanel'
 import { EquipmentAnomalyCard } from './components/EquipmentAnomalyCard'
-import { HumidityDefectScatterPanel } from './components/HumidityDefectScatterPanel'
 import { CorrelationHeatmap } from './components/CorrelationHeatmap'
-import { YieldCorrelationCard } from './components/YieldCorrelationCard'
 import { ZoneSelector } from '../shared/ZoneSelector'
 import { zoneDeviceId } from '../shared/zone'
 
@@ -115,12 +113,23 @@ export function AnalysisTab({ isDark, zone, onZoneChange }: TabProps) {
         />
       </div>
 
-      {/* 행 3: 수율 상관관계 */}
-      <AnalysisRow>
-        <HumidityDefectScatterPanel data={view.yieldCorrelation} isDark={isDark} />
-        <CorrelationHeatmap matrix={view.yieldCorrelation.matrix} isDark={isDark} />
-        <YieldCorrelationCard data={view.yieldCorrelation} isDark={isDark} />
-      </AnalysisRow>
+      {/* 행 3: 환경 안정성 (기압 추세 + 센서 간 상관관계) */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16, alignItems: 'stretch' }}>
+        <TrendPanel
+          title="기압 이동평균 추세"
+          unit="hPa"
+          data={view.trends.pressure}
+          isDark={isDark}
+          rawColor={COLORS.pressureRaw}
+          maColor={COLORS.pressureMA}
+          warning={THRESHOLDS.pressure.warning}
+          danger={THRESHOLDS.pressure.danger}
+          axisMin={THRESHOLDS.pressure.axisMin}
+          axisMax={THRESHOLDS.pressure.axisMax}
+          risingLabel="하락 추세 감지"
+        />
+        <CorrelationHeatmap matrix={view.correlationMatrix} isDark={isDark} />
+      </div>
       </>
       )}
     </div>
