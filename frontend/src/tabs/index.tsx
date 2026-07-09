@@ -32,19 +32,19 @@ export interface TabDef {
 // ──────────────────────────────────────────────────────────────
 export const TABS: TabDef[] = [
   {
-    id: 'chart',
+    id: 'dashboard',
     label: '대시보드',
     icon: <DashboardIcon />,
     component: lazy(() =>
-      import('../chart/Dashboard').then(m => ({ default: m.Dashboard }))
+      import('../dashboard/Dashboard').then(m => ({ default: m.Dashboard }))
     ) as ComponentType<TabProps>,
   },
   {
-    id: 'stats',
+    id: 'analysis',
     label: '통계',
     icon: <StatsIcon />,
     component: lazy(() =>
-      import('../stats/StatsTab').then(m => ({ default: m.StatsTab }))
+      import('../analysis/AnalysisTab').then(m => ({ default: m.AnalysisTab }))
     ) as ComponentType<TabProps>,
   },
   // 팀원 탭 여기에 추가하세용 ↓

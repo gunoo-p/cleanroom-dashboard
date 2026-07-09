@@ -22,7 +22,7 @@ function AnalysisRow({ children }: { children: ReactNode }) {
   )
 }
 
-export function StatsTab({ isDark, zone, onZoneChange }: TabProps) {
+export function AnalysisTab({ isDark, zone, onZoneChange }: TabProps) {
   const deviceId = zoneDeviceId(zone)
 
   const { data: current, isError } = useQuery<AnalysisData>({

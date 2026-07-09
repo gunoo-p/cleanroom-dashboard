@@ -1,7 +1,7 @@
 // 통계(분석) 탭이 백엔드에서 원시 시계열 데이터를 가져오는 API 호출.
 // 전용 /api/analysis 엔드포인트는 없어서, 대시보드와 같은 /api/sensors/{id}/history를 재사용한다.
 import type { AnalysisData } from './types'
-import { buildDashboardData, type RawPoint } from '../chart/deriveDashboard'
+import { buildDashboardData, type RawPoint } from '../dashboard/deriveDashboard'
 
 interface HistoryRow {
   time: string
