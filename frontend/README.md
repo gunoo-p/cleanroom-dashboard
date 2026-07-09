@@ -9,4 +9,4 @@ npm run build
 ```
 
 - `src/dashboard/` — 대시보드(차트) 탭
-- `src/analysis/` — 통계(분석) 탭 (계산 방식은 루트 README 및 `stats.md` 참고)
+- `src/analysis/` — 통계(분석) 탭 (계산 방식은 루트 README, 원 설계 프롬프트는 [`analysis.md`](analysis.md) 참고)
