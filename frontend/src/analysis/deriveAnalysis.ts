@@ -1,7 +1,7 @@
-// 원시 시계열로부터 설비 이상·수율 상관관계 등 분석 지표를 계산한다.
+// 원시 시계열로부터 설비 이상·환경 안정성 추세 등 분석 지표를 계산한다.
 import type { AnalysisData, Severity, SensorKey } from './types'
-import { THRESHOLDS, TREND, SENSOR_DISPLAY } from './config'
-import { movingAverage, linearRegression, pearsonCorrelation, etaToThreshold, mean } from './calc'
+import { THRESHOLDS, TREND } from './config'
+import { movingAverage, linearRegression, pearsonCorrelation, etaToThreshold } from './calc'
 
 // ── 설비 이상 예측 (행 1) ───────────────────────────────────────────
 export interface TrendPanelPoint { t: string; raw: number; ma: number }
@@ -13,17 +13,13 @@ export interface TrendPanelData {
   latestValue: number
 }
 
-function last24h(data: AnalysisData) {
-  const pts = data.points
-  if (pts.length === 0) return []
-  const lastT = new Date(pts[pts.length - 1].t).getTime()
-  return pts.filter(p => lastT - new Date(p.t).getTime() <= 24 * 36e5)
-}
-
+// direction: 'rising'이면 값이 오를수록 위험(온도/가스/공기질), 'falling'이면 내려갈수록
+// 위험(기압 — 클린룸 양압 붕괴 리스크). 어느 쪽이든 "위험 방향으로 가는 기울기"를 감지한다.
 function buildTrendPanel(
   series: { t: string; value: number }[],
   danger: number,
-  riseSlopePerHour: number,
+  slopeThresholdPerHour: number,
+  direction: 'rising' | 'falling' = 'rising',
 ): TrendPanelData {
   if (series.length === 0) {
     return { points: [], ratePerHour: 0, etaHours: null, isRising: false, latestValue: 0 }
@@ -39,11 +35,12 @@ function buildTrendPanel(
   const { slope } = linearRegression(recentHours, recentValues)
 
   const latestValue = raw[raw.length - 1]
+  const isRising = direction === 'rising' ? slope >= slopeThresholdPerHour : slope <= -slopeThresholdPerHour
   return {
     points: series.map((p, i) => ({ t: p.t, raw: raw[i], ma: ma[i] })),
     ratePerHour: slope,
     etaHours: etaToThreshold(latestValue, danger, slope),
-    isRising: slope >= riseSlopePerHour,
+    isRising,
     latestValue,
   }
 }
@@ -55,14 +52,13 @@ export interface EquipmentAnomalyView {
 }
 
 function buildEquipmentAnomaly(data: AnalysisData): EquipmentAnomalyView {
-  const recent = last24h(data)
   const temp = buildTrendPanel(
-    recent.map(p => ({ t: p.t, value: p.temp })),
+    data.points.map(p => ({ t: p.t, value: p.temp })),
     THRESHOLDS.temp.danger,
     TREND.risingSlopePerHour.temp,
   )
   const gas = buildTrendPanel(
-    recent.map(p => ({ t: p.t, value: p.gas })),
+    data.points.map(p => ({ t: p.t, value: p.gas })),
     THRESHOLDS.gas.danger,
     TREND.risingSlopePerHour.gas,
   )
@@ -75,31 +71,34 @@ function buildEquipmentAnomaly(data: AnalysisData): EquipmentAnomalyView {
   return { temp, gas, status }
 }
 
-// ── 공기질 추세 (행 2 좌1) ───────────────────────────────────────────
+// ── 공기질 추세 (행 2) ───────────────────────────────────────────
 function buildAirTrend(data: AnalysisData): TrendPanelData {
-  const recent = last24h(data)
   return buildTrendPanel(
-    recent.map(p => ({ t: p.t, value: p.pm })),
+    data.points.map(p => ({ t: p.t, value: p.pm })),
     THRESHOLDS.air.danger,
     TREND.risingSlopePerHour.air,
   )
 }
 
-// ── 수율 상관관계 (행 3) ────────────────────────────────────────────
-export interface CorrelationCell { row: SensorKey; col: SensorKey; r: number }
-export interface TopCorrelation { key: SensorKey; label: string; color: string; r: number }
-export interface YieldCorrelationView {
-  scatter: { humidity: number; defectRate: number }[]
-  regression: { slope: number; intercept: number }
-  r: number
-  matrix: CorrelationCell[]
-  top3: TopCorrelation[]
-  bannerMultiplier: number | null
+// ── 기압(환경 안정성) 추세 (행 3) ───────────────────────────────────
+// 기압은 낮을수록 위험(클린룸 양압 붕괴로 오염물질 유입 리스크, ISO 14644-4 차압 개념 참고).
+function buildPressureTrend(data: AnalysisData): TrendPanelData {
+  return buildTrendPanel(
+    data.points.map(p => ({ t: p.t, value: p.pressure })),
+    THRESHOLDS.pressure.danger,
+    TREND.risingSlopePerHour.pressure,
+    'falling',
+  )
 }
+
+// ── 센서 간 상관계수 매트릭스 (행 3) ──────────────────────────────
+// 불량률(defect_rate)은 실측이 아니라 지어낸 값이라 여기서는 다루지 않는다.
+// 센서끼리의 상관관계(예: 온도-가스 동반 상승)만 본다 — 이건 실측값 기반이라 그대로 신뢰 가능.
+export interface CorrelationCell { row: SensorKey; col: SensorKey; r: number }
 
 const SENSOR_KEYS: SensorKey[] = ['temp', 'hum', 'gas', 'pm', 'pressure']
 
-function buildYieldCorrelation(data: AnalysisData): YieldCorrelationView {
+function buildCorrelationMatrix(data: AnalysisData): CorrelationCell[] {
   const pts = data.points
   const series: Record<SensorKey, number[]> = {
     temp: pts.map(p => p.temp),
@@ -108,13 +107,6 @@ function buildYieldCorrelation(data: AnalysisData): YieldCorrelationView {
     pm: pts.map(p => p.pm),
     pressure: pts.map(p => p.pressure),
   }
-  const defect = pts.map(p => p.defect_rate)
-
-  const r = pearsonCorrelation(series.hum, defect)
-  const regression = linearRegression(series.hum, defect)
-
-  const step = Math.max(1, Math.floor(pts.length / 120))
-  const scatter = pts.filter((_, i) => i % step === 0).map(p => ({ humidity: p.hum, defectRate: p.defect_rate }))
 
   const matrix: CorrelationCell[] = []
   for (const row of SENSOR_KEYS) {
@@ -122,34 +114,19 @@ function buildYieldCorrelation(data: AnalysisData): YieldCorrelationView {
       matrix.push({ row, col, r: row === col ? 1 : pearsonCorrelation(series[row], series[col]) })
     }
   }
-
-  const top3 = SENSOR_KEYS
-    .map(key => ({ key, r: pearsonCorrelation(series[key], defect) }))
-    .sort((a, b) => Math.abs(b.r) - Math.abs(a.r))
-    .slice(0, 3)
-    .map(({ key, r: cr }) => {
-      const cfg = SENSOR_DISPLAY[key]
-      return { key, label: cfg.label, color: cfg.color, r: cr }
-    })
-
-  const above = defect.filter((_, i) => series.hum[i] > THRESHOLDS.humidity.warning)
-  const below = defect.filter((_, i) => series.hum[i] <= THRESHOLDS.humidity.warning)
-  const belowAvg = mean(below)
-  const bannerMultiplier = above.length > 0 && below.length > 0 && belowAvg > 0 ? mean(above) / belowAvg : null
-
-  return { scatter, regression, r, matrix, top3, bannerMultiplier }
+  return matrix
 }
 
 export interface AnalysisView {
   equipmentAnomaly: EquipmentAnomalyView
-  trends: { air: TrendPanelData }
-  yieldCorrelation: YieldCorrelationView
+  trends: { air: TrendPanelData; pressure: TrendPanelData }
+  correlationMatrix: CorrelationCell[]
 }
 
 export function deriveAnalysis(data: AnalysisData): AnalysisView {
   return {
     equipmentAnomaly: buildEquipmentAnomaly(data),
-    trends: { air: buildAirTrend(data) },
-    yieldCorrelation: buildYieldCorrelation(data),
+    trends: { air: buildAirTrend(data), pressure: buildPressureTrend(data) },
+    correlationMatrix: buildCorrelationMatrix(data),
   }
 }

@@ -5,7 +5,6 @@ import { DashboardIcon, StatsIcon } from '../layout/icons'
 
 export interface TabProps {
   isDark: boolean
-  onToggleDark: () => void
   zone: Zone
   onZoneChange: (zone: Zone) => void
 }

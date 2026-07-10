@@ -1,32 +1,6 @@
 // 원시 센서 시계열로부터 대시보드에 필요한 현재값·상태·통계를 계산한다.
 import type { DashboardData, SensorKey, SensorPoint, Status } from './types'
 
-function clamp(v: number, lo: number, hi: number) {
-  return Math.max(lo, Math.min(hi, v))
-}
-
-// ── 교체 지점: 이 함수를 학습된 모델 점수로 대체한다 ──────────────────────
-function computeDefectRate(humN: number, gasN: number): number {
-  const raw = (humN / 100) * (gasN / 100) * 135 - 18
-  return clamp(raw, 0, 100)
-}
-// ─────────────────────────────────────────────────────────────────────────────
-
-function movingAvg3(arr: number[]): number[] {
-  return arr.map((v, i) => {
-    const prev = arr[i - 1] ?? v
-    const next = arr[i + 1] ?? v
-    return (prev + v + next) / 3
-  })
-}
-
-function normalize(arr: number[]): number[] {
-  const lo = Math.min(...arr)
-  const hi = Math.max(...arr)
-  if (hi === lo) return arr.map(() => 50)
-  return arr.map(v => ((v - lo) / (hi - lo)) * 100)
-}
-
 function minMax(arr: number[]) {
   return {
     min: +Math.min(...arr).toFixed(1),
@@ -85,11 +59,6 @@ export function buildDashboardData(deviceId: string, raw: RawPoint[]): Dashboard
   const pmRaw = raw.map(p => p.pm)
   const pressureRaw = raw.map(p => p.pressure)
 
-  const humN = normalize(humRaw)
-  const gasN = normalize(gasRaw)
-  const defectRaw = humN.map((h, i) => computeDefectRate(h, gasN[i]))
-  const defectSmooth = movingAvg3(defectRaw)
-
   const points: SensorPoint[] = raw.map((p, i) => ({
     t: p.t,
     temp: +p.temp.toFixed(1),
@@ -97,11 +66,9 @@ export function buildDashboardData(deviceId: string, raw: RawPoint[]): Dashboard
     gas: +p.gas.toFixed(0),
     pm: +p.pm.toFixed(1),
     pressure: +pressureRaw[i].toFixed(1),
-    defect_rate: +defectSmooth[i].toFixed(1),
   }))
 
   const last = points[points.length - 1]
-  const defectNow = +defectSmooth[defectSmooth.length - 1].toFixed(1)
 
   return {
     device_id: deviceId,
@@ -113,6 +80,5 @@ export function buildDashboardData(deviceId: string, raw: RawPoint[]): Dashboard
       pm: { value: last.pm, unit: '', status: statusFor('pm', last.pm), ...minMax(pmRaw) },
       pressure: { value: last.pressure, unit: 'hPa', status: statusFor('pressure', last.pressure), ...minMax(pressureRaw) },
     },
-    defect_rate_now: defectNow,
   }
 }

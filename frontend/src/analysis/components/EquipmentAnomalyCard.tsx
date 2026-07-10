@@ -19,16 +19,18 @@ const STATUS_LABELS = { normal: '정상', warning: '주의 관찰', danger: '이
 interface Props {
   data: EquipmentAnomalyView
   isDark: boolean
+  onClick?: () => void
+  expanded?: boolean
 }
 
-export function EquipmentAnomalyCard({ data, isDark }: Props) {
+export function EquipmentAnomalyCard({ data, isDark, onClick, expanded }: Props) {
   const textMuted = isDark ? '#94a3b8' : '#64748b'
   const textPrimary = isDark ? '#f1f5f9' : '#0f172a'
 
   const Row = ({ label, value }: { label: string; value: string }) => (
     <div>
-      <div style={{ color: textMuted, fontSize: '0.72rem', marginBottom: 2 }}>{label}</div>
-      <div style={{ fontWeight: 700, fontSize: '0.95rem', color: textPrimary }}>{value}</div>
+      <div style={{ color: textMuted, fontSize: expanded ? '0.9rem' : '0.72rem', marginBottom: expanded ? 6 : 2 }}>{label}</div>
+      <div style={{ fontWeight: 700, fontSize: expanded ? '1.6rem' : '0.95rem', color: textPrimary }}>{value}</div>
     </div>
   )
 
@@ -37,8 +39,18 @@ export function EquipmentAnomalyCard({ data, isDark }: Props) {
       title="설비 이상 조짐"
       isDark={isDark}
       badge={<Badge label={STATUS_LABELS[data.status]} severity={data.status} isDark={isDark} />}
+      onClick={onClick}
+      expanded={expanded}
     >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 16, height: '100%', justifyContent: 'center' }}>
+      <div style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: expanded ? 36 : 16,
+        height: '100%',
+        justifyContent: 'center',
+        alignItems: expanded ? 'center' : 'stretch',
+        textAlign: expanded ? 'center' : 'left',
+      }}>
         <Row label="온도 변화율" value={formatRate(data.temp.ratePerHour, '°C/h')} />
         <Row label="가스 변화율" value={formatRate(data.gas.ratePerHour, 'ppm/h')} />
         <Row

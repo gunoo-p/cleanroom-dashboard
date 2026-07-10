@@ -1,7 +1,7 @@
 // 대시보드(차트) 탭의 메인 컴포넌트: 실시간 센서값·시계열 차트·구역 선택을 조합한다.
 import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import type { DashboardData, FocusMode, SensorKey, ChartPeriod } from './types'
+import type { DashboardData, SensorKey, ChartPeriod } from './types'
 import { normalizeSeries } from './normalize'
 import { buildDashboardData, statusFor, type RawPoint } from './deriveDashboard'
 import { PERIOD_OPTIONS, SENSOR_CONFIGS, type PeriodOption } from './constants'
@@ -74,13 +74,11 @@ async function fetchLatest(deviceId: string): Promise<LiveReading> {
 
 interface DashboardProps {
   isDark: boolean
-  onToggleDark: () => void
   zone: Zone
   onZoneChange: (zone: Zone) => void
 }
 
-export function Dashboard({ isDark, onToggleDark, zone, onZoneChange }: DashboardProps) {
-  const [focusMode, setFocusMode] = useState<FocusMode>('sensors')
+export function Dashboard({ isDark, zone, onZoneChange }: DashboardProps) {
   const [highlightedSensors, setHighlightedSensors] = useState<SensorKey[]>([])
   const [period, setPeriod] = useState<ChartPeriod>('1d')
 
@@ -155,60 +153,49 @@ export function Dashboard({ isDark, onToggleDark, zone, onZoneChange }: Dashboar
       ) : (
       <>
       <Header
-        defectRate={current.defect_rate_now}
-        focusMode={focusMode}
-        onFocusChange={setFocusMode}
         isDark={isDark}
-        onToggleDark={onToggleDark}
         deviceId={current.device_id}
       />
 
-      {/* 2열 레이아웃 */}
+      {/* 센서값 5개: 차트 위에 가로로 배열(좁아지면 자동 줄바꿈) */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'minmax(160px,220px) 1fr',
-        gridTemplateRows: 'auto',
-        gap: 16,
-        alignItems: 'stretch',
-      }}
-        className="dashboard-grid"
-      >
-        {/* 좌측: 온도·습도·가스·미세입자 */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {SENSOR_CONFIGS.map(cfg => (
-            <SensorBox
-              key={cfg.key}
-              sensorKey={cfg.key}
-              meta={liveCurrent[cfg.key]}
-              sparkData={sparkData(cfg.key)}
-              highlighted={highlightedSensors.length === 0 || highlightedSensors.includes(cfg.key)}
-              onClick={handleSensorClick}
-              isDark={isDark}
-            />
-          ))}
-        </div>
+        gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+        gap: 12,
+        marginBottom: 16,
+      }}>
+        {SENSOR_CONFIGS.map(cfg => (
+          <SensorBox
+            key={cfg.key}
+            sensorKey={cfg.key}
+            meta={liveCurrent[cfg.key]}
+            sparkData={sparkData(cfg.key)}
+            highlighted={highlightedSensors.length === 0 || highlightedSensors.includes(cfg.key)}
+            onClick={handleSensorClick}
+            isDark={isDark}
+          />
+        ))}
+      </div>
 
-        {/* 중앙 차트 */}
-        <div style={{
-          background: cardBg,
-          borderRadius: 12,
-          padding: '16px 8px 4px 0',
-          height: 420,
-          border: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`,
-          display: 'flex',
-          flexDirection: 'column',
-        }}>
-          <div style={{ flex: 1, minHeight: 0 }}>
-            <SensorChart
-              data={normalized}
-              focusMode={focusMode}
-              highlightedSensors={highlightedSensors}
-              isDark={isDark}
-              period={period}
-            />
-          </div>
-          <PeriodSelector value={period} onChange={setPeriod} isDark={isDark} />
+      {/* 차트 */}
+      <div style={{
+        background: cardBg,
+        borderRadius: 12,
+        padding: '16px 8px 4px 0',
+        height: 420,
+        border: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`,
+        display: 'flex',
+        flexDirection: 'column',
+      }}>
+        <div style={{ flex: 1, minHeight: 0 }}>
+          <SensorChart
+            data={normalized}
+            highlightedSensors={highlightedSensors}
+            isDark={isDark}
+            period={period}
+          />
         </div>
+        <PeriodSelector value={period} options={PERIOD_OPTIONS} onChange={setPeriod} isDark={isDark} />
       </div>
 
       {/* 범례 */}
@@ -218,8 +205,6 @@ export function Dashboard({ isDark, onToggleDark, zone, onZoneChange }: Dashboar
         justifyContent: 'center',
       }}>
         <span>Y축: 정규화값 (0~100, 구간 min–max 기준)</span>
-        <span>·</span>
-        <span>점선: 불량률 선</span>
         <span>·</span>
         <span>클릭: 항목 강조(여러 개 선택 가능) / 재클릭: 해제</span>
       </div>

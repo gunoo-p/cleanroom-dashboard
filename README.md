@@ -37,7 +37,6 @@ services/ingestion/   # 센서 데이터 수신 (HTTP + MQTT)
 services/query/       # 조회 API
 infra/                # DB 초기화 스크립트, mosquitto 설정
 frontend/             # React 대시보드
-simulator/            # ESP32 없이 테스트용 센서 시뮬레이터 (tkinter GUI)
 ```
 
 ## 실행 방법
@@ -46,8 +45,6 @@ simulator/            # ESP32 없이 테스트용 센서 시뮬레이터 (tkinte
 docker compose up -d --build   # timescaledb, redis, mosquitto, ingestion, query
 cd frontend && npm install && npm run dev   # http://localhost:5173
 ```
-
-ESP32 실장비 없이 테스트하려면 `simulator/`의 GUI 시뮬레이터를 쓴다 (`python simulator.py`, 3초 간격으로 HTTP 전송).
 
 ## 센서 구성
 
@@ -65,11 +62,11 @@ DB 스키마(`infra/Init.sql`): `sensor_data(time, device_id, temperature, humid
 
 실시간 센서값 · 시계열 차트 · 구역(zone) 선택. 상단 숫자는 `/api/sensors/{id}/latest`를 3초마다 폴링해 체감 실시간성을 확보하고(차트 데이터는 무겁게 하지 않음), 차트는 `/api/sensors/{id}/history`를 10초마다 폴링한다.
 
-온도/습도 상태는 반도체 클린룸 실측 기준 4단계(정상/주의/경고/중단, [참고자료](#참고자료) 2번)로 판정한다. 가스/공기질은 raw ADC 값에 대한 임시 placeholder 임계치만 있다 (아래 "알려진 한계" 참고).
+온도/습도 상태는 반도체 클린룸 실측 기준 4단계(정상/주의/경고/중단, [참고자료](#참고자료) 1번)로 판정한다. 가스/공기질은 raw ADC 값에 대한 임시 placeholder 임계치만 있다.
 
 ### 통계(분석) 탭 (`frontend/src/analysis/`)
 
-설비 이상 예측 · 공기질 추세 · 수율 상관관계. 백엔드는 원시 시계열만 주고, 이동평균·회귀·상관계수 같은 파생 지표는 전부 프론트(`deriveAnalysis.ts`)에서 계산한다.
+설비 이상 예측 · 공기질 추세 · 환경 안정성. 백엔드는 원시 시계열만 주고, 이동평균·회귀·상관계수 같은 파생 지표는 전부 프론트(`deriveAnalysis.ts`)에서 계산한다.
 
 | 함수 (`calc.ts`) | 하는 일 |
 |---|---|
@@ -78,23 +75,15 @@ DB 스키마(`infra/Init.sql`): `sensor_data(time, device_id, temperature, humid
 | `pearsonCorrelation` | 피어슨 상관계수(-1~1) |
 | `etaToThreshold` | 현재 속도로 계속 가면 임계치까지 걸리는 시간 |
 
-- **설비 이상 예측**: 최근 24시간 온도·가스의 이동평균 + 최근 8시간 변화율 → 위험임계 도달 예상시간(ETA). "지금 위험한가"가 아니라 "이대로 가면 위험해지는가"를 본다.
+- **설비 이상 예측**: 조회 기간(1일/1주일/1개월, 탭 우측 상단에서 선택) 동안의 온도·가스 이동평균 + 최근 8시간 변화율 → 위험임계 도달 예상시간(ETA). "지금 위험한가"가 아니라 "이대로 가면 위험해지는가"를 본다.
 - **공기질 추세**: 같은 로직을 MQ135(공기질)에 적용.
-- **수율 상관관계**: 습도-불량률 산점도+회귀선, 5개 센서 상관계수 히트맵, 불량률 상관 Top3. (원래 있던 "필터 교체 예측" 카드는 근거 데이터가 없어져 제거됨)
+- **환경 안정성**: 기압(차압) 이동평균 추세 + 5개 센서 상관계수 히트맵. (원래 있던 "습도-불량률 상관관계"·"필터 교체 예측"은 근거 데이터가 없어져 제거됨)
 
-이 탭을 만들 때 쓴 원 설계 프롬프트는 `frontend/stats.md`에 남아있다.
-
-## ⚠️ 알려진 한계
-
-1. **`defect_rate`(불량률)는 실측이 아니다.** `dashboard/deriveDashboard.ts`의 `computeDefectRate`가 습도·가스로 지어낸 임시 공식이다 (`// 교체 지점: 이 함수를 학습된 모델 점수로 대체한다` 주석 참고). 통계 탭의 산점도·상관계수·Top3는 전부 이 가짜 값에서 파생된 데모다. 제목의 "SECOM 기반"은 UCI SECOM 데이터셋([참고자료](#참고자료) 1번)의 분석 기법을 참고했다는 뜻이지, 실제 그 데이터를 쓴다는 뜻이 아니다. 실제 MES/검사 장비의 pass/fail 데이터가 들어오면 이 자리를 교체해야 한다.
-2. **가스(MQ-2)·공기질(MQ135) 임계치는 단위가 안 맞는 placeholder다.** 두 센서 다 `analogRead()`로 raw ADC(0~4095)만 주는데, 공식 기준(KOSHA %LEL, ppm 등)은 보정(calibration)된 단위라 raw 값에 그대로 적용할 수 없다. 제조사(Winsen) 공식 매뉴얼([참고자료](#참고자료) 5, 6번)도 그래프 이미지만 줄 뿐 변환 공식은 안 줘서, 표준가스 없이는 신뢰할 수 있는 raw→ppm 변환이 어렵다. 베이스라인 대비 상대값(%) 방식으로 전환하는 걸 검토 중이다.
-3. **통계 탭(`analysis/config.ts`)의 온도/가스 임계치는 대시보드 탭의 최신 실측 기준(4단계)이 아직 반영 안 됐다.** 두 탭이 별도 설정 파일을 쓰고 있어서 서로 다르다.
+각 패널의 계산법·예측 근거(왜 이 지표를 보는가)·신빙성(실측 검증된 것 vs 아직 가정인 것)은 [`frontend/analysis.md`](frontend/analysis.md)에 정리되어 있다.
 
 ## 참고자료
 
-1. UCI Machine Learning Repository — SECOM Data Set. <https://archive.ics.uci.edu/ml/datasets/SECOM> (반도체 공정 센서-불량 공개 데이터셋. 수율 상관관계 분석 기법 참고용, 실데이터는 미사용)
-2. Air Innovations — "Semiconductor Trace Moisture". <https://airinnovations.com/blog/semiconductor-trace-moisture/> (반도체 클린룸 온습도 관리 기준: 정상/주의/경고/중단 4단계)
-3. 한국산업안전보건공단(KOSHA) — KOSHA GUIDE P-166-2020, "가스누출감지경보기 설치 및 유지보수에 관한 기술지침" (2020.12). <https://www.kosha.or.kr/kosha/data/guidanceP.do> (가연성가스 LEL 25%/50% 경보, 독성가스 ERPG-2/AEGL-2/IDLH 등 물질별 참조표)
-4. 한국산업안전보건공단(KOSHA) — KOSHA GUIDE P-46-2012, "클린룸의 안전관리에 관한 기술지침" (사내 자료로 확인, 공개 URL 미확인)
-5. Zhengzhou Winsen Electronics — MQ-2 Semiconductor Sensor for Flammable Gas, Manual v1.6 (2021-07-01). <https://www.winsen-sensor.com/d/files/newpdf/mq-2-(ver1_6)---manual.pdf>
-6. Zhengzhou Winsen Electronics — MQ135 Semiconductor Sensor for Air Quality, Manual v1.4. <https://www.winsen-sensor.com/d/files/PDF/Semiconductor%20Gas%20Sensor/MQ135%20(Ver1.4)%20-%20Manual.pdf>
+1. Air Innovations — "Semiconductor Trace Moisture". <https://airinnovations.com/blog/semiconductor-trace-moisture/> (반도체 클린룸 온습도 관리 기준: 정상/주의/경고/중단 4단계)
+2. 한국산업안전보건공단(KOSHA) — KOSHA GUIDE P-166-2020, "가스누출감지경보기 설치 및 유지보수에 관한 기술지침" (2020.12). <https://www.kosha.or.kr/kosha/data/guidanceP.do> (가연성가스 LEL 25%/50% 경보, 독성가스 ERPG-2/AEGL-2/IDLH 등 물질별 참조표)
+3. Zhengzhou Winsen Electronics — MQ-2 Semiconductor Sensor for Flammable Gas, Manual v1.6 (2021-07-01). <https://www.winsen-sensor.com/d/files/newpdf/mq-2-(ver1_6)---manual.pdf>
+4. Zhengzhou Winsen Electronics — MQ135 Semiconductor Sensor for Air Quality, Manual v1.4. <https://www.winsen-sensor.com/d/files/PDF/Semiconductor%20Gas%20Sensor/MQ135%20(Ver1.4)%20-%20Manual.pdf>
