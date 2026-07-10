@@ -119,8 +119,6 @@ export function Sidebar({ tabs, activeId, onSelect, isOpen, onToggle, isDark, on
             whiteSpace: 'nowrap',
             textAlign: 'left',
           }}
-          onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = hoverBg }}
-          onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'none' }}
         >
           <span style={{ fontSize: '1rem', flexShrink: 0 }}>
             {isDark ? '🌙' : '☀️'}

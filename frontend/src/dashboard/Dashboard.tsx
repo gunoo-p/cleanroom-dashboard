@@ -195,7 +195,7 @@ export function Dashboard({ isDark, zone, onZoneChange }: DashboardProps) {
             period={period}
           />
         </div>
-        <PeriodSelector value={period} onChange={setPeriod} isDark={isDark} />
+        <PeriodSelector value={period} options={PERIOD_OPTIONS} onChange={setPeriod} isDark={isDark} />
       </div>
 
       {/* 범례 */}

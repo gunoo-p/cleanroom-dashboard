@@ -1,6 +1,7 @@
 // 통계(분석) 탭이 백엔드에서 원시 시계열 데이터를 가져오는 API 호출.
 // 전용 /api/analysis 엔드포인트는 없어서, 대시보드와 같은 /api/sensors/{id}/history를 재사용한다.
 import type { AnalysisData } from './types'
+import type { AnalysisPeriodOption } from './config'
 import { buildDashboardData, type RawPoint } from '../dashboard/deriveDashboard'
 
 interface HistoryRow {
@@ -12,15 +13,15 @@ interface HistoryRow {
   air_quality: number | null
 }
 
-export async function fetchAnalysis(deviceId: string, days = 30): Promise<AnalysisData> {
+export async function fetchAnalysis(deviceId: string, period: AnalysisPeriodOption): Promise<AnalysisData> {
   const to = new Date()
   const from = new Date(to)
-  from.setDate(from.getDate() - days)
+  from.setDate(from.getDate() - period.days)
 
   const params = new URLSearchParams({
     from: from.toISOString(),
     to: to.toISOString(),
-    interval_minutes: '60',
+    interval_minutes: String(period.intervalMinutes),
   })
   const url = `/api/sensors/${deviceId}/history?${params}`
   const res = await fetch(url)
