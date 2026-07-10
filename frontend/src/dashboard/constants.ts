@@ -9,8 +9,6 @@ export const SENSOR_CONFIGS: SensorConfig[] = [
   { key: 'pressure', label: '기압',    unit: 'hPa',  color: '#F59E0B' },
 ]
 
-export const DEFECT_COLOR = '#E0473C'
-
 export const STATUS_COLORS = {
   normal:  { bg: '#D1FAE5', text: '#1D9E75' },
   caution: { bg: '#FEF9C3', text: '#A16207' },

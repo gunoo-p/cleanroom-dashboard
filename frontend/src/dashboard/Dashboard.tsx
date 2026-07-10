@@ -1,7 +1,7 @@
 // 대시보드(차트) 탭의 메인 컴포넌트: 실시간 센서값·시계열 차트·구역 선택을 조합한다.
 import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import type { DashboardData, FocusMode, SensorKey, ChartPeriod } from './types'
+import type { DashboardData, SensorKey, ChartPeriod } from './types'
 import { normalizeSeries } from './normalize'
 import { buildDashboardData, statusFor, type RawPoint } from './deriveDashboard'
 import { PERIOD_OPTIONS, SENSOR_CONFIGS, type PeriodOption } from './constants'
@@ -74,13 +74,11 @@ async function fetchLatest(deviceId: string): Promise<LiveReading> {
 
 interface DashboardProps {
   isDark: boolean
-  onToggleDark: () => void
   zone: Zone
   onZoneChange: (zone: Zone) => void
 }
 
-export function Dashboard({ isDark, onToggleDark, zone, onZoneChange }: DashboardProps) {
-  const [focusMode, setFocusMode] = useState<FocusMode>('sensors')
+export function Dashboard({ isDark, zone, onZoneChange }: DashboardProps) {
   const [highlightedSensors, setHighlightedSensors] = useState<SensorKey[]>([])
   const [period, setPeriod] = useState<ChartPeriod>('1d')
 
@@ -155,11 +153,7 @@ export function Dashboard({ isDark, onToggleDark, zone, onZoneChange }: Dashboar
       ) : (
       <>
       <Header
-        defectRate={current.defect_rate_now}
-        focusMode={focusMode}
-        onFocusChange={setFocusMode}
         isDark={isDark}
-        onToggleDark={onToggleDark}
         deviceId={current.device_id}
       />
 
@@ -196,7 +190,6 @@ export function Dashboard({ isDark, onToggleDark, zone, onZoneChange }: Dashboar
         <div style={{ flex: 1, minHeight: 0 }}>
           <SensorChart
             data={normalized}
-            focusMode={focusMode}
             highlightedSensors={highlightedSensors}
             isDark={isDark}
             period={period}
@@ -212,8 +205,6 @@ export function Dashboard({ isDark, onToggleDark, zone, onZoneChange }: Dashboar
         justifyContent: 'center',
       }}>
         <span>Y축: 정규화값 (0~100, 구간 min–max 기준)</span>
-        <span>·</span>
-        <span>점선: 불량률 선</span>
         <span>·</span>
         <span>클릭: 항목 강조(여러 개 선택 가능) / 재클릭: 해제</span>
       </div>

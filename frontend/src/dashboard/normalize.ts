@@ -24,7 +24,6 @@ export function normalizeSeries(points: SensorPoint[]): NormalizedPoint[] {
     gas: p.gas,
     pm: p.pm,
     pressure: p.pressure,
-    defect_rate: p.defect_rate,
     tempN:     +norm(p.temp,     'temp').toFixed(1),
     humN:      +norm(p.hum,      'hum').toFixed(1),
     gasN:      +norm(p.gas,      'gas').toFixed(1),

@@ -36,6 +36,7 @@ export function AppShell() {
         isOpen={sidebarOpen}
         onToggle={() => setSidebarOpen(p => !p)}
         isDark={isDark}
+        onToggleDark={() => setIsDark(d => !d)}
       />
 
       <main style={{ flex: 1, minWidth: 0, height: '100%', overflowY: 'auto' }}>
@@ -55,7 +56,6 @@ export function AppShell() {
         >
           <ActiveComponent
             isDark={isDark}
-            onToggleDark={() => setIsDark(d => !d)}
             zone={zone}
             onZoneChange={setZone}
           />

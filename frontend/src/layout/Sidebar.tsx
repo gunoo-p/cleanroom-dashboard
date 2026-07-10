@@ -8,9 +8,10 @@ interface SidebarProps {
   isOpen: boolean
   onToggle: () => void
   isDark: boolean
+  onToggleDark: () => void
 }
 
-export function Sidebar({ tabs, activeId, onSelect, isOpen, onToggle, isDark }: SidebarProps) {
+export function Sidebar({ tabs, activeId, onSelect, isOpen, onToggle, isDark, onToggleDark }: SidebarProps) {
   const bg = isDark ? '#1e293b' : '#ffffff'
   const border = isDark ? '#334155' : '#e2e8f0'
   const textMuted = isDark ? '#64748b' : '#94a3b8'
@@ -101,22 +102,31 @@ export function Sidebar({ tabs, activeId, onSelect, isOpen, onToggle, isDark }: 
 
       {/* 다크모드 토글 */}
       <div style={{ padding: '12px 0', borderTop: `1px solid ${border}` }}>
-        <div
+        <button
+          onClick={onToggleDark}
+          title="다크/라이트 모드 전환"
           style={{
             display: 'flex',
             alignItems: 'center',
             gap: 12,
             padding: '10px 18px',
+            width: '100%',
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
             fontSize: '0.8rem',
             color: textMuted,
             whiteSpace: 'nowrap',
+            textAlign: 'left',
           }}
+          onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = hoverBg }}
+          onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'none' }}
         >
           <span style={{ fontSize: '1rem', flexShrink: 0 }}>
             {isDark ? '🌙' : '☀️'}
           </span>
           {isOpen && <span>{isDark ? '다크 모드' : '라이트 모드'}</span>}
-        </div>
+        </button>
       </div>
     </aside>
   )

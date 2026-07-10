@@ -1,14 +1,13 @@
-// 정규화된 센서값과 불량률을 함께 보여주는 대시보드 메인 시계열 차트.
+// 정규화된 센서값을 보여주는 대시보드 메인 시계열 차트.
 import {
-  ComposedChart, Line, Area, XAxis, YAxis,
+  ComposedChart, Line, XAxis, YAxis,
   Tooltip, ResponsiveContainer, ReferenceLine,
 } from 'recharts'
-import type { NormalizedPoint, FocusMode, SensorKey, ChartPeriod } from '../types'
-import { SENSOR_CONFIGS, DEFECT_COLOR } from '../constants'
+import type { NormalizedPoint, SensorKey, ChartPeriod } from '../types'
+import { SENSOR_CONFIGS } from '../constants'
 
 interface Props {
   data: NormalizedPoint[]
-  focusMode: FocusMode
   highlightedSensors: SensorKey[]
   isDark: boolean
   period: ChartPeriod
@@ -61,19 +60,11 @@ function CustomTooltip({ active, payload, isDark, period }: CustomTooltipProps) 
           {cfg.label}: <b>{d[cfg.key]}{cfg.unit}</b>
         </div>
       ))}
-      <div style={{ color: DEFECT_COLOR, marginTop: 4 }}>
-        불량률: <b>{d.defect_rate.toFixed(1)}%</b>
-      </div>
     </div>
   )
 }
 
-export function SensorChart({ data, focusMode, highlightedSensors, isDark, period }: Props) {
-  const sensorOpacity = focusMode === 'sensors' ? 1 : 0.16
-  const defectOpacity = focusMode === 'defect' ? 1 : 0.3
-  const defectStroke = focusMode === 'defect' ? 3 : 1.5
-  const showDefectFill = focusMode === 'defect'
-
+export function SensorChart({ data, highlightedSensors, isDark, period }: Props) {
   const gridColor = isDark ? '#1e3a5f' : '#e2e8f0'
   const axisColor = isDark ? '#475569' : '#94a3b8'
 
@@ -82,8 +73,8 @@ export function SensorChart({ data, focusMode, highlightedSensors, isDark, perio
   const thinned = data.filter((_, i) => i % thinFactor === 0)
 
   const getSensorLineOpacity = (key: SensorKey) => {
-    if (highlightedSensors.length > 0 && !highlightedSensors.includes(key)) return sensorOpacity * 0.25
-    return sensorOpacity
+    if (highlightedSensors.length > 0 && !highlightedSensors.includes(key)) return 0.25
+    return 1
   }
 
   return (
@@ -120,27 +111,7 @@ export function SensorChart({ data, focusMode, highlightedSensors, isDark, perio
           )}
         />
 
-        {/* 불량률 위험대 (70% 이상) 면 */}
-        {showDefectFill && (
-          <ReferenceLine y={70} stroke={DEFECT_COLOR} strokeOpacity={0.4} strokeDasharray="6 3" />
-        )}
-
-        {/* 불량률 Area + Line */}
-        <Area
-          type="monotone"
-          dataKey="defect_rate"
-          stroke={DEFECT_COLOR}
-          strokeWidth={defectStroke}
-          strokeDasharray={focusMode === 'sensors' ? '6 3' : '0'}
-          fill={DEFECT_COLOR}
-          fillOpacity={showDefectFill ? 0.12 : 0}
-          opacity={defectOpacity}
-          style={{ transition: 'opacity 0.25s, stroke-width 0.25s' }}
-          dot={false}
-          isAnimationActive={false}
-        />
-
-        {/* 4개 측정값 정규화 선 */}
+        {/* 5개 측정값 정규화 선 */}
         {SENSOR_CONFIGS.map(cfg => (
           <Line
             key={cfg.key}
