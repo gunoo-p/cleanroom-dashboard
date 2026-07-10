@@ -13,13 +13,6 @@ export interface TrendPanelData {
   latestValue: number
 }
 
-function last24h(data: AnalysisData) {
-  const pts = data.points
-  if (pts.length === 0) return []
-  const lastT = new Date(pts[pts.length - 1].t).getTime()
-  return pts.filter(p => lastT - new Date(p.t).getTime() <= 24 * 36e5)
-}
-
 // direction: 'rising'이면 값이 오를수록 위험(온도/가스/공기질), 'falling'이면 내려갈수록
 // 위험(기압 — 클린룸 양압 붕괴 리스크). 어느 쪽이든 "위험 방향으로 가는 기울기"를 감지한다.
 function buildTrendPanel(
@@ -59,14 +52,13 @@ export interface EquipmentAnomalyView {
 }
 
 function buildEquipmentAnomaly(data: AnalysisData): EquipmentAnomalyView {
-  const recent = last24h(data)
   const temp = buildTrendPanel(
-    recent.map(p => ({ t: p.t, value: p.temp })),
+    data.points.map(p => ({ t: p.t, value: p.temp })),
     THRESHOLDS.temp.danger,
     TREND.risingSlopePerHour.temp,
   )
   const gas = buildTrendPanel(
-    recent.map(p => ({ t: p.t, value: p.gas })),
+    data.points.map(p => ({ t: p.t, value: p.gas })),
     THRESHOLDS.gas.danger,
     TREND.risingSlopePerHour.gas,
   )
@@ -81,9 +73,8 @@ function buildEquipmentAnomaly(data: AnalysisData): EquipmentAnomalyView {
 
 // ── 공기질 추세 (행 2) ───────────────────────────────────────────
 function buildAirTrend(data: AnalysisData): TrendPanelData {
-  const recent = last24h(data)
   return buildTrendPanel(
-    recent.map(p => ({ t: p.t, value: p.pm })),
+    data.points.map(p => ({ t: p.t, value: p.pm })),
     THRESHOLDS.air.danger,
     TREND.risingSlopePerHour.air,
   )
@@ -92,9 +83,8 @@ function buildAirTrend(data: AnalysisData): TrendPanelData {
 // ── 기압(환경 안정성) 추세 (행 3) ───────────────────────────────────
 // 기압은 낮을수록 위험(클린룸 양압 붕괴로 오염물질 유입 리스크, ISO 14644-4 차압 개념 참고).
 function buildPressureTrend(data: AnalysisData): TrendPanelData {
-  const recent = last24h(data)
   return buildTrendPanel(
-    recent.map(p => ({ t: p.t, value: p.pressure })),
+    data.points.map(p => ({ t: p.t, value: p.pressure })),
     THRESHOLDS.pressure.danger,
     TREND.risingSlopePerHour.pressure,
     'falling',

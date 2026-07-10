@@ -13,6 +13,25 @@ body {
 @media (max-width: 900px) {
   .stats-row {
     grid-template-columns: 1fr !important;
+    /* 데스크톱에서는 3개 행이 뷰포트 높이를 3등분(flex:1)하지만, 좁은 화면에서
+       패널이 세로로 쌓이면 그 방식으로는 각 패널이 너무 눌린다 — 콘텐츠 높이대로
+       자연스럽게 쌓이고 탭 전체가 스크롤되게 되돌린다. */
+    flex: none !important;
+  }
+
+  .analysis-tab {
+    height: auto !important;
+    min-height: 100vh !important;
+    overflow: visible !important;
+  }
+
+  /* 패널도 뷰포트 비율 대신 고정 높이로 되돌려서(예전 방식) 차트가 눌리지 않게 한다. */
+  .analysis-panel {
+    height: auto !important;
+  }
+  .analysis-panel-body {
+    flex: none !important;
+    height: 240px !important;
   }
 }
 

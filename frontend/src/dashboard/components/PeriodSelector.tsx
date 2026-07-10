@@ -1,17 +1,20 @@
-// 차트 조회 기간(1일/1주일/1개월/6개월/1년) 선택 버튼 그룹.
-import type { ChartPeriod } from '../types'
-import { PERIOD_OPTIONS } from '../constants'
+// 조회 기간 선택 버튼 그룹 (대시보드·분석 탭이 각자 자신의 기간 목록을 넘겨 재사용).
+interface Option<T extends string> {
+  key: T
+  label: string
+}
 
-interface Props {
-  value: ChartPeriod
-  onChange: (period: ChartPeriod) => void
+interface Props<T extends string> {
+  value: T
+  options: Option<T>[]
+  onChange: (period: T) => void
   isDark: boolean
 }
 
-export function PeriodSelector({ value, onChange, isDark }: Props) {
+export function PeriodSelector<T extends string>({ value, options, onChange, isDark }: Props<T>) {
   return (
     <div style={{ display: 'flex', justifyContent: 'center', gap: 4, paddingTop: 8, flexShrink: 0 }}>
-      {PERIOD_OPTIONS.map(opt => {
+      {options.map(opt => {
         const active = opt.key === value
         return (
           <button

@@ -3,7 +3,7 @@
 // 임계치·색상·라벨·계산 파라미터를 여기 한 곳에서만 관리한다.
 // 컴포넌트에는 숫자를 하드코딩하지 말고 이 파일 값을 참조할 것.
 // ─────────────────────────────────────────────────────────────────
-import type { SensorKey } from './types'
+import type { AnalysisPeriod, SensorKey } from './types'
 
 export const THRESHOLDS = {
   temp: { warning: 35, danger: 45, axisMin: 15, axisMax: 50 },
@@ -13,6 +13,20 @@ export const THRESHOLDS = {
   // 기압은 낮을수록 위험(클린룸 양압 붕괴 리스크). 대시보드 탭과 동일한 값 사용.
   pressure: { warning: 1005, danger: 995, axisMin: 990, axisMax: 1030 },
 }
+
+export interface AnalysisPeriodOption {
+  key: AnalysisPeriod
+  label: string
+  days: number
+  intervalMinutes: number
+}
+
+// 조회 기간별 백엔드 요청 범위. 기간이 길어질수록 포인트 수를 억제하려고 간격도 함께 넓힌다.
+export const PERIOD_OPTIONS: AnalysisPeriodOption[] = [
+  { key: '1d', label: '1일', days: 1, intervalMinutes: 15 },
+  { key: '7d', label: '1주일', days: 7, intervalMinutes: 60 },
+  { key: '30d', label: '1개월', days: 30, intervalMinutes: 240 },
+]
 
 export const TREND = {
   movingAverageWindow: 6,

@@ -13,3 +13,6 @@ export interface AnalysisData {
 }
 
 export type Severity = 'normal' | 'warning' | 'danger'
+
+// 분석 탭 조회 기간 — 대시보드 탭과 달리 이동평균·회귀 계산에 의미 있는 범위만 제공한다.
+export type AnalysisPeriod = '1d' | '7d' | '30d'
