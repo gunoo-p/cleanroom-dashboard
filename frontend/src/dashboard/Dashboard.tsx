@@ -1,5 +1,5 @@
 // 대시보드(차트) 탭의 메인 컴포넌트: 실시간 센서값·시계열 차트·구역 선택을 조합한다.
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import type { DashboardData, SensorKey, ChartPeriod } from './types'
 import { normalizeSeries } from './normalize'
@@ -47,6 +47,7 @@ async function fetchDashboard(deviceId: string, option: PeriodOption): Promise<D
 }
 
 interface LatestRow {
+  time: string
   temperature: number | null
   humidity: number | null
   pressure: number | null
@@ -55,6 +56,7 @@ interface LatestRow {
 }
 
 interface LiveReading {
+  time: string
   temp: number
   hum: number
   gas: number
@@ -69,7 +71,17 @@ async function fetchLatest(deviceId: string): Promise<LiveReading> {
   if (row.temperature == null || row.humidity == null || row.pressure == null || row.gas == null || row.air_quality == null) {
     throw new Error('incomplete data')
   }
-  return { temp: row.temperature, hum: row.humidity, gas: row.gas, pm: row.air_quality, pressure: row.pressure }
+  return { time: row.time, temp: row.temperature, hum: row.humidity, gas: row.gas, pm: row.air_quality, pressure: row.pressure }
+}
+
+// 장치가 멈춰도 /latest는 DB에 남아있는 마지막 값을 계속 정상 응답하므로(에러가 안 남),
+// 응답 성공 여부가 아니라 그 값의 시각이 얼마나 오래됐는지로 온라인/오프라인을 판단해야 한다.
+// 실기기(1초)·시뮬레이터(3초) 모두 감안해 여유 있게 15초를 기준으로 잡는다.
+const STALE_MS = 15_000
+
+function offlineLabel(lastSeenMs: number): string {
+  const sec = Math.floor((Date.now() - lastSeenMs) / 1000)
+  return sec < 60 ? `${sec}초째 데이터 없음` : `${Math.floor(sec / 60)}분째 데이터 없음`
 }
 
 interface DashboardProps {
@@ -102,16 +114,30 @@ export function Dashboard({ isDark, zone, onZoneChange }: DashboardProps) {
     enabled: current != null,
   })
 
+  // react-query는 폴링 응답 내용이 이전과 동일하면(=센서가 멈춰서 같은 마지막 값만 반복 수신)
+  // 구조적으로 같은 데이터로 보고 리렌더링을 생략한다(structuralSharing). 그러면 이 컴포넌트가
+  // 다시 렌더링될 일이 없어져서 "지금 시각 - 마지막 수신 시각" 계산이 멈춘 시점에 얼어붙어버리고,
+  // 실제로는 오프라인인데 화면엔 계속 "온라인"으로 남는 문제가 생긴다. 그래서 데이터 변화와
+  // 무관하게 일정 주기로 강제 리렌더링을 트리거해 신선도 계산이 항상 현재 시각 기준으로 돌게 한다.
+  const [, forceTick] = useState(0)
+  useEffect(() => {
+    const id = setInterval(() => forceTick(t => t + 1), 1_000)
+    return () => clearInterval(id)
+  }, [])
+
   const liveCurrent = useMemo(() => {
     if (!current) return null
     if (!live) return current.current
-    const merge = (key: keyof LiveReading) => ({
+    const merge = (key: SensorKey) => ({
       ...current.current[key],
       value: +live[key].toFixed(key === 'gas' ? 0 : 1),
       status: statusFor(key, live[key]),
     })
     return { temp: merge('temp'), hum: merge('hum'), gas: merge('gas'), pm: merge('pm'), pressure: merge('pressure') }
   }, [current, live])
+
+  const lastSeenMs = live ? new Date(live.time).getTime() : null
+  const isOnline = lastSeenMs != null ? Date.now() - lastSeenMs < STALE_MS : null
 
   const normalized = useMemo(() => current ? normalizeSeries(current.points) : [], [current])
 
@@ -155,6 +181,8 @@ export function Dashboard({ isDark, zone, onZoneChange }: DashboardProps) {
       <Header
         isDark={isDark}
         deviceId={current.device_id}
+        isOnline={isOnline}
+        offlineLabel={lastSeenMs != null ? offlineLabel(lastSeenMs) : ''}
       />
 
       {/* 센서값 5개: 차트 위에 가로로 배열(좁아지면 자동 줄바꿈) */}

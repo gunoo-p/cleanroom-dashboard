@@ -1,16 +1,19 @@
 // 로그 캘린더 탭: 날짜별 센서 이벤트 발생 현황을 달력으로 보여주고, 클릭하면 상세 로그 모달을 띈다.
-// ⚠ 데모: mockLogs.ts의 센서/임계값은 이 탭 전용이며 실제 구역·센서 설정과는 무관하다.
-import { useCallback, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import type { TabProps } from '../tabs'
+import { zoneDeviceId } from '../shared/zone'
 import { ZoneSelector } from '../shared/ZoneSelector'
-import { DOW, genLogs, getDayCounts, type LogStatus } from './mockLogs'
+import { fetchMonthHistory } from './api'
+import { computeMonthDayCounts } from './deriveLogs'
+import { DOW } from './constants'
+import type { LogStatus } from './types'
 import { Dots, LogModal } from './components/LogModal'
 
 interface SelectedDay {
   year: number
   month: number
   day: number
-  logs: ReturnType<typeof genLogs>
 }
 
 interface DayCell {
@@ -26,6 +29,7 @@ const SUMMARY_ITEMS: { status: LogStatus; label: string; color: string; bg: stri
 ]
 
 export function LogCalendarTab({ isDark, zone, onZoneChange }: TabProps) {
+  const deviceId = zoneDeviceId(zone)
   const now = new Date()
   const [year, setYear] = useState(now.getFullYear())
   const [month, setMonth] = useState(now.getMonth() + 1)
@@ -36,15 +40,23 @@ export function LogCalendarTab({ isDark, zone, onZoneChange }: TabProps) {
   // 리딩 빈 칸까지 포함한 총 칸 수를 7로 나눠 그 달에 필요한 행 수를 구한다(4~6행).
   const rowCount = Math.ceil((firstDay + daysInMonth) / 7)
 
+  const { data: monthRows, isError } = useQuery({
+    queryKey: ['log-calendar-month', deviceId, year, month],
+    queryFn: () => fetchMonthHistory(deviceId, year, month),
+    retry: false,
+  })
+  const noData = monthRows !== undefined && monthRows.length === 0
+
   // 날짜별 위험/경고/정상 집계를 한 번만 계산해서, 셀 색상과 사이드 요약 카드가 같은 데이터를 공유한다.
   const monthDays: DayCell[] = useMemo(() => {
+    const counts = monthRows ? computeMonthDayCounts(monthRows) : {}
     const days: DayCell[] = []
     for (let day = 1; day <= daysInMonth; day++) {
-      const { danger, warning } = getDayCounts(year, month, day, zone)
-      days.push({ day, danger, warning })
+      const c = counts[day] ?? { danger: 0, warning: 0 }
+      days.push({ day, ...c })
     }
     return days
-  }, [year, month, zone, daysInMonth])
+  }, [monthRows, daysInMonth])
 
   const monthSummary = useMemo(() => {
     const counts: Record<LogStatus, number> = { danger: 0, warning: 0, normal: 0 }
@@ -62,10 +74,6 @@ export function LogCalendarTab({ isDark, zone, onZoneChange }: TabProps) {
   const nextMonth = () => {
     if (month === 12) { setYear(y => y + 1); setMonth(1) } else setMonth(m => m + 1)
   }
-
-  const openDay = useCallback((day: number) => {
-    setSelected({ year, month, day, logs: genLogs(year, month, day, zone) })
-  }, [year, month, zone])
 
   const bg = isDark ? '#0f172a' : '#f8fafc'
   const cardBg = isDark ? '#1e293b' : '#ffffff'
@@ -125,6 +133,16 @@ export function LogCalendarTab({ isDark, zone, onZoneChange }: TabProps) {
             </div>
           </div>
 
+          {isError ? (
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: textMuted, fontSize: '0.9rem' }}>
+              ⚠ {deviceId} 장치의 데이터를 가져올 수 없습니다.
+            </div>
+          ) : noData ? (
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: textMuted, fontSize: '0.9rem' }}>
+              {year}년 {month}월에는 기록된 데이터가 없습니다.
+            </div>
+          ) : (
+          <>
           {/* 요일 헤더 */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', flexShrink: 0, marginBottom: 6 }}>
             {DOW.map((d, i) => (
@@ -166,7 +184,7 @@ export function LogCalendarTab({ isDark, zone, onZoneChange }: TabProps) {
               return (
                 <div
                   key={day}
-                  onClick={() => openDay(day)}
+                  onClick={() => setSelected({ year, month, day })}
                   style={{
                     borderRadius: 8,
                     padding: '7px 9px',
@@ -194,43 +212,47 @@ export function LogCalendarTab({ isDark, zone, onZoneChange }: TabProps) {
               )
             })}
           </div>
+          </>
+          )}
         </div>
 
         {/* 이번 달 요약 카드 */}
         <div style={{ ...cardStyle, padding: '16px', display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div style={{ fontSize: '0.85rem', fontWeight: 700, color: textPrimary }}>이번 달 요약</div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {SUMMARY_ITEMS.map(item => (
-              <div key={item.status} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: '0.8rem', color: textMuted }}>{item.label}</span>
-                <span style={{
-                  background: isDark ? `${item.color}22` : item.bg,
-                  color: item.color,
-                  fontWeight: 700,
-                  fontSize: '0.78rem',
-                  padding: '3px 10px',
-                  borderRadius: 999,
-                }}>
-                  {monthSummary[item.status]}일
-                </span>
-              </div>
-            ))}
-          </div>
+          {isError || noData ? (
+            <div style={{ fontSize: '0.8rem', color: textMuted }}>
+              {isError ? '데이터를 가져올 수 없습니다.' : '집계할 데이터가 없습니다.'}
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {SUMMARY_ITEMS.map(item => (
+                <div key={item.status} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: '0.8rem', color: textMuted }}>{item.label}</span>
+                  <span style={{
+                    background: isDark ? `${item.color}22` : item.bg,
+                    color: item.color,
+                    fontWeight: 700,
+                    fontSize: '0.78rem',
+                    padding: '3px 10px',
+                    borderRadius: 999,
+                  }}>
+                    {monthSummary[item.status]}일
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
 
           <div style={{ borderTop: `1px solid ${border}`, paddingTop: 12, fontSize: '0.72rem', color: textMuted, lineHeight: 1.6 }}>
             날짜를 클릭하면 그날의 전체 이벤트 로그를 볼 수 있습니다.
-          </div>
-
-          <div style={{ marginTop: 'auto', fontSize: '0.66rem', color: textMuted, lineHeight: 1.4 }}>
-            ⚠ 데모 데이터 · 실제 구역·센서 값과는 무관합니다.
           </div>
         </div>
       </div>
 
       {/* 모달 */}
       {selected && (
-        <LogModal date={selected} logs={selected.logs} onClose={() => setSelected(null)} isDark={isDark} />
+        <LogModal date={selected} deviceId={deviceId} zoneLabel={`${zone} 구역`} onClose={() => setSelected(null)} isDark={isDark} />
       )}
     </div>
   )
