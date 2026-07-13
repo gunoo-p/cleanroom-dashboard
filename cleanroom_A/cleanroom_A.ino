@@ -4,9 +4,9 @@
 #include <Adafruit_BME280.h>
 
 // ── 설정 ──────────────────────────
-const char* ssid        = "거누의 S26 Ultra";
-const char* password    = "gunoo0387";
-const char* mqtt_server = "10.137.139.237";  // 서버(Mac) IP
+const char* ssid        = "";  // WiFi 이름
+const char* password    = "";  // WiFi 비밀번호
+const char* mqtt_server = "";  // 서버 IP
 const int   mqtt_port   = 1883;
 const char* topic       = "cleanroom/sensors";
 const char* device_id   = "esp32-A1";
