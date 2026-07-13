@@ -1,49 +1,59 @@
 # 반도체 클린룸 모니터링 프로젝트
 
-ESP32 센서(온도·습도·기압·가스·공기질)로 클린룸 환경을 실시간 모니터링하고, 추세 기반 설비 이상 예측·수율 상관관계를 보여주는 웹 대시보드.
+ESP32 센서(온도·습도·기압·가스·공기질)로 클린룸 환경을 실시간 모니터링하고, 추세 기반 설비 이상 예측·환경 안정성·과거 이벤트 로그를 보여주는 웹 대시보드. 임계치를 넘으면 텔레그램으로 알림이 가고, 하루치 로그는 Claude API로 자연어 요약을 받아볼 수 있다.
 
 ## 아키텍처
 
 ```
 ESP32 (BME280 + MQ-2 + MQ135)
-        │  HTTP(POST /api/data) 또는 MQTT(cleanroom/sensors)
-        ▼
-┌────────────────┐      ┌────────────────┐
-│   ingestion     │─────▶│  TimescaleDB    │
-│ (FastAPI, 8001) │      │  (5433)         │
-└────────────────┘      └────────────────┘
-        │                        ▲
-        ▼                        │
-┌────────────────┐      ┌────────────────┐
-│   mosquitto     │      │    query        │
-│  (MQTT, 1883)   │      │ (FastAPI, 8000)  │
-└────────────────┘      └────────────────┘
-        ▲                        │
-        │                        ▼
-   ESP32 publish            frontend (Vite, 5173)
-                             ├─ 대시보드(차트) 탭
-                             └─ 통계(분석) 탭
+        │
+        ├─ HTTP POST /api/data ──────────────┐
+        └─ MQTT publish ──▶ mosquitto(1883) ─┤
+                                              ▼
+                                     ingestion (FastAPI, 8001)
+                                              │  ├─▶ TimescaleDB(5433) 저장
+                                              │  └─▶ 임계치 체크 → 텔레그램 알림
+                                              ▼
+                                     TimescaleDB(5433)
+                                              ▲
+                                              │  조회
+                                     query (FastAPI, 8000)
+                                              │  └─▶ Claude API (로그 AI 요약)
+                                              ▼
+                                     frontend (Vite, 5173)
+                                       ├─ 대시보드(차트) 탭   — 실시간 값 + 연결 상태
+                                       ├─ 통계(분석) 탭       — 추세 예측 + 상관관계
+                                       └─ 로그 캘린더 탭      — 과거 이벤트 조회 + CSV + AI 요약
 ```
 
-- **ingestion**: 센서 데이터 수신(HTTP + MQTT) → TimescaleDB 저장 + Redis publish
-- **query**: TimescaleDB 조회 API (기간별 조회, TimescaleDB `time_bucket` 집계 지원)
+- **ingestion**: 센서 데이터 수신(HTTP + MQTT) → TimescaleDB 저장. 매 판독마다 임계치를 체크해 상태가 바뀌는 순간(정상↔경고↔위험)에 텔레그램으로 알림 발송
+- **query**: TimescaleDB 조회 API(기간별 조회, `time_bucket` 집계) + 로그 캘린더용 AI 요약 API(Claude API 호출)
 - **mosquitto**: MQTT 브로커 (`listener 1883`, `allow_anonymous true`)
-- **frontend**: React + Vite. 실시간 대시보드와 통계(분석) 탭으로 구성
+- **frontend**: React + Vite. 대시보드·통계(분석)·로그 캘린더 3개 탭으로 구성
 
 ## 디렉토리 구조
 
 ```
-services/ingestion/   # 센서 데이터 수신 (HTTP + MQTT)
-services/query/       # 조회 API
+services/ingestion/   # 센서 데이터 수신(HTTP + MQTT) + 임계치 알림
+services/query/       # 조회 API + AI 요약 API
 infra/                # DB 초기화 스크립트, mosquitto 설정
 frontend/             # React 대시보드
+cleanroom_A/          # ESP32 펌웨어(Arduino)
 ```
 
 ## 실행 방법
 
 ```bash
-docker compose up -d --build   # timescaledb, redis, mosquitto, ingestion, query
+docker compose up -d --build   # timescaledb, mosquitto, ingestion, query
 cd frontend && npm install && npm run dev   # http://localhost:5173
+```
+
+AI 요약·텔레그램 알림 없이도 앱 자체는 정상 동작한다. 두 기능을 쓰려면 루트 `.env`에 아래 값을 채워야 한다:
+
+```bash
+ANTHROPIC_API_KEY=     # Claude API 키 (console.anthropic.com)
+TELEGRAM_BOT_TOKEN=    # @BotFather로 발급받은 봇 토큰
+TELEGRAM_CHAT_ID=      # 알림 받을 채팅방(개인/그룹) id
 ```
 
 ## 센서 구성
@@ -62,11 +72,13 @@ DB 스키마(`infra/Init.sql`): `sensor_data(time, device_id, temperature, humid
 
 실시간 센서값 · 시계열 차트 · 구역(zone) 선택. 상단 숫자는 `/api/sensors/{id}/latest`를 3초마다 폴링해 체감 실시간성을 확보하고(차트 데이터는 무겁게 하지 않음), 차트는 `/api/sensors/{id}/history`를 10초마다 폴링한다.
 
-온도/습도 상태는 반도체 클린룸 실측 기준 4단계(정상/주의/경고/중단, [참고자료](#참고자료) 1번)로 판정한다. 가스/공기질은 raw ADC 값에 대한 임시 placeholder 임계치만 있다.
+온도/습도 상태는 반도체 클린룸 실측 기준 4단계(정상/주의/경고/중단, [참고자료](#참고자료) 1번)로 판정한다. 가스/공기질은 raw ADC 값에 대한 임시 placeholder 임계치만 있다. 각 센서 카드 하단에는 정상 범위(예: `정상 21.5~22.5°C`)를 같이 표시해, 지금 값이 임계치에서 얼마나 떨어져 있는지 바로 보이게 한다.
+
+헤더에는 장치 연결 상태(🟢 실시간 수신 중 / 🔴 N초·N분째 데이터 없음)가 표시된다. `/latest` 응답 시각과 현재 시각을 비교해 15초 이상 새 데이터가 없으면 오프라인으로 판정한다 — 응답 자체는 성공해도(DB에 남은 마지막 값을 계속 돌려주므로) 시각 기준으로 신선도를 판단해야 하는 점에 유의.
 
 ### 통계(분석) 탭 (`frontend/src/analysis/`)
 
-설비 이상 예측 · 공기질 추세 · 환경 안정성. 백엔드는 원시 시계열만 주고, 이동평균·회귀·상관계수 같은 파생 지표는 전부 프론트(`deriveAnalysis.ts`)에서 계산한다.
+설비 이상 예측 · 공기질 추세 · 환경 안정성. 백엔드는 원시 시계열만 주고, 이동평균·회귀·상관계수 같은 파생 지표는 전부 프론트(`deriveAnalysis.ts`)에서 계산한다. 조회 기간(1일/1주일/1개월)을 선택하면 추세·상관관계 계산이 전부 그 기간 기준으로 다시 계산된다. 각 패널은 클릭하면 자기 자리에서 확대되며(패널 그리드 영역 안에서만), 확대 시 추세 패널엔 현재값/변화율/임계 도달 예상 시간이, 히트맵엔 상관계수 상위 3쌍이 추가로 보인다.
 
 | 함수 (`calc.ts`) | 하는 일 |
 |---|---|
@@ -75,11 +87,28 @@ DB 스키마(`infra/Init.sql`): `sensor_data(time, device_id, temperature, humid
 | `pearsonCorrelation` | 피어슨 상관계수(-1~1) |
 | `etaToThreshold` | 현재 속도로 계속 가면 임계치까지 걸리는 시간 |
 
-- **설비 이상 예측**: 조회 기간(1일/1주일/1개월, 탭 우측 상단에서 선택) 동안의 온도·가스 이동평균 + 최근 8시간 변화율 → 위험임계 도달 예상시간(ETA). "지금 위험한가"가 아니라 "이대로 가면 위험해지는가"를 본다.
+- **설비 이상 예측**: 온도·가스 이동평균 + 최근 8시간 변화율 → 위험임계 도달 예상시간(ETA). "지금 위험한가"가 아니라 "이대로 가면 위험해지는가"를 본다.
 - **공기질 추세**: 같은 로직을 MQ135(공기질)에 적용.
-- **환경 안정성**: 기압(차압) 이동평균 추세 + 5개 센서 상관계수 히트맵. (원래 있던 "습도-불량률 상관관계"·"필터 교체 예측"은 근거 데이터가 없어져 제거됨)
+- **환경 안정성**: 기압(차압) 이동평균 추세 + 5개 센서 상관계수 히트맵.
 
 각 패널의 계산법·예측 근거(왜 이 지표를 보는가)·신빙성(실측 검증된 것 vs 아직 가정인 것)은 [`frontend/analysis.md`](frontend/analysis.md)에 정리되어 있다.
+
+### 로그 캘린더 탭 (`frontend/src/logcalendar/`)
+
+날짜별 위험/경고 이벤트를 달력으로 보여주고, 날짜를 클릭하면 그 날의 센서별 상세 로그를 볼 수 있다. 백엔드 목데이터 없이 실제 `/api/sensors/{id}/history` 데이터만 쓴다 — 월간 뷰는 30분 간격, 일간 상세는 1분 간격으로 집계(실기기가 3초마다 값을 보내므로 5분 단위로는 짧은 임계 초과가 뭉개져서 1분으로 좁힘). 상태 판정은 대시보드와 동일한 `statusFor()`를 재사용해 두 탭 표시가 항상 일치한다.
+
+- **센서별/상태별 필터**: 전체·위험·경고·정상 탭과 온도/습도/가스/공기질/기압 드롭다운을 조합해서 볼 수 있다.
+- **CSV 내보내기**: 현재 필터에 걸린 로그만 UTF-8 BOM 포함 CSV로 다운로드(엑셀 한글 깨짐 방지).
+- **AI 요약**: "✨ AI로 하루 요약 보기" 버튼을 누르면 그날 집계(위험/경고/정상 건수, 센서별 내역)를 Claude API(`claude-haiku-4-5`)에 보내 2~3문장 한국어 요약을 받아온다. 열 때 자동 호출하지 않고 버튼을 눌러야 호출되며, 같은 날짜는 세션 내에서 재호출하지 않는다(비용 관리). API 키는 `query` 서비스에서만 다루고 프론트엔드에는 노출되지 않는다.
+
+## 알림(텔레그램)
+
+`services/ingestion/app/alerts.py`가 매 센서 판독마다 임계치를 체크한다. 온도·습도는 대시보드와 동일한 중심값±이탈폭 기준, 가스·공기질·기압은 고정 임계치 기준으로 판정하며(`deriveDashboard.ts`의 `statusFor()`와 동일한 값을 유지해야 함), 상태가 실제로 바뀌는 순간(정상→경고/위험, 위험/경고→정상)에만 발송해 같은 상태가 계속돼도 스팸이 되지 않는다. 서비스가 막 시작돼 이전 상태를 모르는 상황에서 이미 위험/경고 상태면 그 즉시 한 번 알린다(놓치는 것보다 중복이 낫다는 판단). 메시지에는 현재값과 함께 정상 범위도 같이 표시된다.
+
+```
+🔴 [esp32-A1] 온도 위험 임계 초과 (30.0°C · 정상 21.5~22.5°C)
+✅ [esp32-A1] 온도 정상 범위로 복귀 (22.1°C · 정상 21.5~22.5°C)
+```
 
 ## 참고자료
 

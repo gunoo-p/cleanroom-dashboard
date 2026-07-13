@@ -1,6 +1,7 @@
 // 센서 1종의 현재값·스파크라인·최소/최대/평균을 보여주는 카드.
 import type { SensorMeta, SensorKey } from '../types'
 import { SENSOR_CONFIGS } from '../constants'
+import { normalRangeLabel } from '../deriveDashboard'
 import { StatusPill } from './StatusPill'
 import { Sparkline } from './Sparkline'
 
@@ -57,6 +58,9 @@ export function SensorBox({ sensorKey, meta, sparkData, highlighted, onClick, is
         <span>최저 {meta.min}</span>
         <span>최고 {meta.max}</span>
         <span>평균 {meta.avg}</span>
+      </div>
+      <div style={{ marginTop: 4, fontSize: '0.68rem', color: isDark ? '#475569' : '#b0b8c4' }}>
+        {normalRangeLabel(sensorKey)}
       </div>
     </div>
   )

@@ -1,5 +1,6 @@
 // 원시 센서 시계열로부터 대시보드에 필요한 현재값·상태·통계를 계산한다.
 import type { DashboardData, SensorKey, SensorPoint, Status } from './types'
+import { SENSOR_CONFIGS } from './constants'
 
 function minMax(arr: number[]) {
   return {
@@ -41,6 +42,19 @@ export function statusFor(key: SensorKey, value: number): Status {
     return value < t.danger ? 'danger' : value < t.warning ? 'warning' : 'normal'
   }
   return value > t.danger ? 'danger' : value > t.warning ? 'warning' : 'normal'
+}
+
+// 대시보드 카드·알림 메시지에 "정상 범위가 어디까지인지" 보여주기 위한 라벨.
+export function normalRangeLabel(key: SensorKey): string {
+  const unit = SENSOR_CONFIGS.find(c => c.key === key)!.unit
+  const dev = DEVIATION_THRESHOLDS[key]
+  if (dev) {
+    const lo = (dev.center - dev.caution).toFixed(1)
+    const hi = (dev.center + dev.caution).toFixed(1)
+    return `정상 ${lo}~${hi}${unit}`
+  }
+  const t = DIRECT_THRESHOLDS[key]!
+  return LOW_IS_BAD[key] ? `정상 ${t.warning}${unit} 이상` : `정상 ${t.warning}${unit} 이하`
 }
 
 export interface RawPoint {

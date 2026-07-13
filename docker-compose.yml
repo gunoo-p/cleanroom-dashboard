@@ -11,11 +11,6 @@ services:
       - timescale_data:/var/lib/postgresql/data
       - ./infra/init.sql:/docker-entrypoint-initdb.d/init.sql
 
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6380:6379"
-
   mosquitto:
     image: eclipse-mosquitto:2
     ports:
@@ -27,20 +22,21 @@ services:
     build: ./services/ingestion
     environment:
       DB_URL: postgresql://admin:password@timescaledb:5432/sensordb
-      REDIS_URL: redis://redis:6379
       MQTT_HOST: mosquitto
       MQTT_PORT: "1883"
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID}
     ports:
       - "8001:8000"
     depends_on:
       - timescaledb
-      - redis
       - mosquitto
 
   query:
     build: ./services/query
     environment:
       DB_URL: postgresql://admin:password@timescaledb:5432/sensordb
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
     ports:
       - "8000:8000"
     depends_on:
