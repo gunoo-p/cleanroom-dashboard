@@ -6,5 +6,7 @@ class SensorData(BaseModel):
     device_id: str
     temperature: Optional[float] = None
     humidity: Optional[float] = None
-    pm25: Optional[float] = None
+    pressure: Optional[float] = None
+    pressure_outside: Optional[float] = None
     gas: Optional[float] = None
+    air_quality: Optional[float] = None
