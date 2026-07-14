@@ -13,15 +13,17 @@ DEVIATION_THRESHOLDS = {
     "hum": {"center": 45, "caution": 2, "warning": 5, "danger": 10},
 }
 
+# pressure는 실내-실외 차압(Pa). ISO 14644 기준 클린룸 양압 권장치(ISO 7: +10~20Pa, ISO 8: +5~15Pa)를
+# 참고해 10Pa 이상을 정상, 5~10Pa를 경고, 5Pa 미만(0 이하 포함, 양압 붕괴)을 위험으로 잡음.
 DIRECT_THRESHOLDS = {
     "gas": {"warning": 2000, "danger": 3000},
     "pm": {"warning": 2000, "danger": 3000},
-    "pressure": {"warning": 1005, "danger": 995},
+    "pressure": {"warning": 10, "danger": 5},
 }
 
-SENSOR_LABELS = {"temp": "온도", "hum": "습도", "gas": "가스", "pm": "공기질", "pressure": "기압"}
-SENSOR_UNITS = {"temp": "°C", "hum": "%", "gas": "", "pm": "", "pressure": "hPa"}
-FIELD_TO_KEY = {"temperature": "temp", "humidity": "hum", "gas": "gas", "air_quality": "pm", "pressure": "pressure"}
+SENSOR_LABELS = {"temp": "온도", "hum": "습도", "gas": "가스", "pm": "공기질", "pressure": "차압"}
+SENSOR_UNITS = {"temp": "°C", "hum": "%", "gas": "", "pm": "", "pressure": "Pa"}
+FIELD_TO_KEY = {"temperature": "temp", "humidity": "hum", "gas": "gas", "air_quality": "pm", "pressure_diff": "pressure"}
 
 
 def status_for(key: str, value: float) -> str:
@@ -62,6 +64,15 @@ _last_alert_status: dict[tuple[str, str], str] = {}
 async def check_and_alert(device_id: str, fields: dict):
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
         return
+
+    # 실내(pressure)·실외(pressure_outside) 절대기압 자체는 날씨에 따라 같이 오르내려서 의미가 없고,
+    # 그 차이(hPa→Pa 변환)만 실제 클린룸 양압 상태를 반영한다.
+    pressure = fields.get("pressure")
+    pressure_outside = fields.get("pressure_outside")
+    fields = {
+        **fields,
+        "pressure_diff": (pressure - pressure_outside) * 100 if pressure is not None and pressure_outside is not None else None,
+    }
 
     for field, key in FIELD_TO_KEY.items():
         value = fields.get(field)

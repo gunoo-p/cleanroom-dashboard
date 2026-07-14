@@ -17,8 +17,15 @@ interface HistoryRow {
   temperature: number | null
   humidity: number | null
   pressure: number | null
+  pressure_outside: number | null
   gas: number | null
   air_quality: number | null
+}
+
+// 실내-실외 절대기압(hPa) 차이를 Pa 단위 차압으로 변환. 날씨에 따라 둘 다 같이 오르내리는
+// 공통 성분이 빼기 과정에서 상쇄되고, 실제 클린룸 양압 상태만 남는다.
+function pressureDiffPa(inside: number, outside: number): number {
+  return (inside - outside) * 100
 }
 
 // 선택한 기간에 데이터가 그냥 없는 것(백엔드 404)과 진짜 연결 실패를 구분하기 위한 에러 타입.
@@ -42,9 +49,9 @@ async function fetchDashboard(deviceId: string, option: PeriodOption): Promise<D
   const rows: HistoryRow[] = await res.json()
 
   const raw: RawPoint[] = rows
-    .filter((r): r is HistoryRow & Record<'temperature' | 'humidity' | 'pressure' | 'gas' | 'air_quality', number> =>
-      r.temperature != null && r.humidity != null && r.pressure != null && r.gas != null && r.air_quality != null)
-    .map(r => ({ t: r.time, temp: r.temperature, hum: r.humidity, gas: r.gas, pm: r.air_quality, pressure: r.pressure }))
+    .filter((r): r is HistoryRow & Record<'temperature' | 'humidity' | 'pressure' | 'pressure_outside' | 'gas' | 'air_quality', number> =>
+      r.temperature != null && r.humidity != null && r.pressure != null && r.pressure_outside != null && r.gas != null && r.air_quality != null)
+    .map(r => ({ t: r.time, temp: r.temperature, hum: r.humidity, gas: r.gas, pm: r.air_quality, pressure: pressureDiffPa(r.pressure, r.pressure_outside) }))
 
   if (raw.length === 0) throw new NoDataError('no data')
 
@@ -56,6 +63,7 @@ interface LatestRow {
   temperature: number | null
   humidity: number | null
   pressure: number | null
+  pressure_outside: number | null
   gas: number | null
   air_quality: number | null
 }
@@ -73,10 +81,10 @@ async function fetchLatest(deviceId: string): Promise<LiveReading> {
   const res = await fetch(`/api/sensors/${deviceId}/latest`)
   if (!res.ok) throw new Error('API error')
   const row: LatestRow = await res.json()
-  if (row.temperature == null || row.humidity == null || row.pressure == null || row.gas == null || row.air_quality == null) {
+  if (row.temperature == null || row.humidity == null || row.pressure == null || row.pressure_outside == null || row.gas == null || row.air_quality == null) {
     throw new Error('incomplete data')
   }
-  return { time: row.time, temp: row.temperature, hum: row.humidity, gas: row.gas, pm: row.air_quality, pressure: row.pressure }
+  return { time: row.time, temp: row.temperature, hum: row.humidity, gas: row.gas, pm: row.air_quality, pressure: pressureDiffPa(row.pressure, row.pressure_outside) }
 }
 
 // 장치가 멈춰도 /latest는 DB에 남아있는 마지막 값을 계속 정상 응답하므로(에러가 안 남),

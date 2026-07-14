@@ -100,7 +100,7 @@ export function LogModal({ date, deviceId, zoneLabel, onClose, isDark }: LogModa
   }, [tab, sensorFilter])
 
   const allLogs = logs ?? []
-  // 센서 필터(온도/습도/가스/공기질/기압)를 먼저 적용하고, 그 위에 상태 탭(전체/위험/경고/정상)을 적용한다.
+  // 센서 필터(온도/습도/가스/공기질/차압)를 먼저 적용하고, 그 위에 상태 탭(전체/위험/경고/정상)을 적용한다.
   const sensorScoped = sensorFilter === 'all' ? allLogs : allLogs.filter(l => l.sensor === sensorFilter)
   const filtered = tab === 'all' ? sensorScoped : sensorScoped.filter(l => l.status === tab)
   // 헤더의 총계는 센서 필터와 무관하게 그 날 전체 기준(항상 동일하게 유지되는 요약).

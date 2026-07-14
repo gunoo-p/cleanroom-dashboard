@@ -28,6 +28,7 @@ async def _handle_message(message: aiomqtt.Message):
         payload.get("temperature"),
         payload.get("humidity"),
         payload.get("pressure"),
+        payload.get("pressure_outside"),
         payload.get("mq2_raw"),
         payload.get("mq135_raw"),
     )

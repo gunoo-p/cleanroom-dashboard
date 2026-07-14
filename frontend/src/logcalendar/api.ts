@@ -5,6 +5,7 @@ export interface HistoryRow {
   temperature: number | null
   humidity: number | null
   pressure: number | null
+  pressure_outside: number | null
   gas: number | null
   air_quality: number | null
 }

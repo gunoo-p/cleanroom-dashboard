@@ -9,8 +9,14 @@ interface HistoryRow {
   temperature: number | null
   humidity: number | null
   pressure: number | null
+  pressure_outside: number | null
   gas: number | null
   air_quality: number | null
+}
+
+// 실내-실외 절대기압(hPa) 차이를 Pa 단위 차압으로 변환(dashboard/Dashboard.tsx와 동일 계산).
+function pressureDiffPa(inside: number, outside: number): number {
+  return (inside - outside) * 100
 }
 
 export async function fetchAnalysis(deviceId: string, period: AnalysisPeriodOption): Promise<AnalysisData> {
@@ -29,9 +35,9 @@ export async function fetchAnalysis(deviceId: string, period: AnalysisPeriodOpti
   const rows: HistoryRow[] = await res.json()
 
   const raw: RawPoint[] = rows
-    .filter((r): r is HistoryRow & Record<'temperature' | 'humidity' | 'pressure' | 'gas' | 'air_quality', number> =>
-      r.temperature != null && r.humidity != null && r.pressure != null && r.gas != null && r.air_quality != null)
-    .map(r => ({ t: r.time, temp: r.temperature, hum: r.humidity, gas: r.gas, pm: r.air_quality, pressure: r.pressure }))
+    .filter((r): r is HistoryRow & Record<'temperature' | 'humidity' | 'pressure' | 'pressure_outside' | 'gas' | 'air_quality', number> =>
+      r.temperature != null && r.humidity != null && r.pressure != null && r.pressure_outside != null && r.gas != null && r.air_quality != null)
+    .map(r => ({ t: r.time, temp: r.temperature, hum: r.humidity, gas: r.gas, pm: r.air_quality, pressure: pressureDiffPa(r.pressure, r.pressure_outside) }))
 
   if (raw.length === 0) throw new Error('no data')
 

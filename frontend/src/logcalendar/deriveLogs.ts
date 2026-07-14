@@ -16,11 +16,16 @@ interface CleanRow {
   pressure: number
 }
 
+// 실내-실외 절대기압(hPa) 차이를 Pa 단위 차압으로 변환(dashboard/Dashboard.tsx와 동일 계산).
+function pressureDiffPa(inside: number, outside: number): number {
+  return (inside - outside) * 100
+}
+
 function cleanRows(rows: HistoryRow[]): CleanRow[] {
   return rows
-    .filter((r): r is HistoryRow & Record<'temperature' | 'humidity' | 'pressure' | 'gas' | 'air_quality', number> =>
-      r.temperature != null && r.humidity != null && r.pressure != null && r.gas != null && r.air_quality != null)
-    .map(r => ({ t: r.time, temp: r.temperature, hum: r.humidity, gas: r.gas, pm: r.air_quality, pressure: r.pressure }))
+    .filter((r): r is HistoryRow & Record<'temperature' | 'humidity' | 'pressure' | 'pressure_outside' | 'gas' | 'air_quality', number> =>
+      r.temperature != null && r.humidity != null && r.pressure != null && r.pressure_outside != null && r.gas != null && r.air_quality != null)
+    .map(r => ({ t: r.time, temp: r.temperature, hum: r.humidity, gas: r.gas, pm: r.air_quality, pressure: pressureDiffPa(r.pressure, r.pressure_outside) }))
 }
 
 // caution(주의)은 경고보다 약한 신호라 로그 캘린더의 3단계(정상/경고/위험) 집계에서는 정상으로 취급한다.

@@ -6,7 +6,7 @@ export const SENSOR_CONFIGS: SensorConfig[] = [
   { key: 'hum',      label: '습도',    unit: '%',    color: '#EC4899' },
   { key: 'gas',      label: '가스',    unit: '',  color: '#8B5CF6' },
   { key: 'pm',       label: '공기질', unit: '', color: '#14B8A6' },
-  { key: 'pressure', label: '기압',    unit: 'hPa',  color: '#F59E0B' },
+  { key: 'pressure', label: '차압',    unit: 'Pa',   color: '#F59E0B' },
 ]
 
 export const STATUS_COLORS = {

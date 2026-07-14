@@ -14,7 +14,7 @@ export interface TrendPanelData {
 }
 
 // direction: 'rising'이면 값이 오를수록 위험(온도/가스/공기질), 'falling'이면 내려갈수록
-// 위험(기압 — 클린룸 양압 붕괴 리스크). 어느 쪽이든 "위험 방향으로 가는 기울기"를 감지한다.
+// 위험(차압 — 클린룸 양압 붕괴 리스크). 어느 쪽이든 "위험 방향으로 가는 기울기"를 감지한다.
 function buildTrendPanel(
   series: { t: string; value: number }[],
   danger: number,
@@ -80,8 +80,9 @@ function buildAirTrend(data: AnalysisData): TrendPanelData {
   )
 }
 
-// ── 기압(환경 안정성) 추세 (행 3) ───────────────────────────────────
-// 기압은 낮을수록 위험(클린룸 양압 붕괴로 오염물질 유입 리스크, ISO 14644-4 차압 개념 참고).
+// ── 차압(환경 안정성) 추세 (행 3) ───────────────────────────────────
+// 실내-실외 BME280 두 대의 절대기압 차이(Pa) — 날씨로 인한 공통 변동은 상쇄되고 클린룸
+// 양압 상태만 남는다. 낮을수록 위험(양압 붕괴로 오염물질 유입 리스크, ISO 14644 기준).
 function buildPressureTrend(data: AnalysisData): TrendPanelData {
   return buildTrendPanel(
     data.points.map(p => ({ t: p.t, value: p.pressure })),

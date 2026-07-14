@@ -8,6 +8,6 @@ router = APIRouter()
 async def receive_sensor_data(data: SensorData):
     await save_reading(
         data.device_id, data.temperature, data.humidity,
-        data.pressure, data.gas, data.air_quality,
+        data.pressure, data.pressure_outside, data.gas, data.air_quality,
     )
     return {"status": "ok", "device_id": data.device_id}

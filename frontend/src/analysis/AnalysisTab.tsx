@@ -1,4 +1,4 @@
-// 통계(분석) 탭의 메인 컴포넌트: 설비 이상·공기질 추세·환경 안정성(기압/상관관계) 행을 조합한다.
+// 통계(분석) 탭의 메인 컴포넌트: 설비 이상·공기질 추세·환경 안정성(차압/상관관계) 행을 조합한다.
 import { useMemo, useRef, useState, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import type { TabProps } from '../tabs'
@@ -93,8 +93,8 @@ function renderPanel(key: PanelKey, view: AnalysisView, isDark: boolean, onClick
     case 'pressure':
       return (
         <TrendPanel
-          title="기압 이동평균 추세"
-          unit="hPa"
+          title="차압 이동평균 추세"
+          unit="Pa"
           data={view.trends.pressure}
           isDark={isDark}
           rawColor={COLORS.pressureRaw}
@@ -199,7 +199,7 @@ export function AnalysisTab({ isDark, zone, onZoneChange }: TabProps) {
         {gridSlot('air')}
       </AnalysisRow>
 
-      {/* 행 3: 환경 안정성 (기압 추세 + 센서 간 상관관계) */}
+      {/* 행 3: 환경 안정성 (차압 추세 + 센서 간 상관관계) */}
       <AnalysisRow columns="1fr 1fr">
         {gridSlot('pressure')}
         {gridSlot('correlation')}

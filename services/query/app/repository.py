@@ -34,6 +34,7 @@ async def get_sensor_history(
                        avg(temperature) AS temperature,
                        avg(humidity) AS humidity,
                        avg(pressure) AS pressure,
+                       avg(pressure_outside) AS pressure_outside,
                        avg(gas) AS gas,
                        avg(air_quality) AS air_quality
                 FROM sensor_data
@@ -43,14 +44,14 @@ async def get_sensor_history(
             """, timedelta(minutes=interval_minutes), device_id, from_time, to_time)
         else:
             rows = await pool.fetch("""
-                SELECT time, device_id, temperature, humidity, pressure, gas, air_quality
+                SELECT time, device_id, temperature, humidity, pressure, pressure_outside, gas, air_quality
                 FROM sensor_data
                 WHERE device_id = $1 AND time BETWEEN $2 AND $3
                 ORDER BY time
             """, device_id, from_time, to_time)
     else:
         rows = await pool.fetch("""
-            SELECT time, device_id, temperature, humidity, pressure, gas, air_quality
+            SELECT time, device_id, temperature, humidity, pressure, pressure_outside, gas, air_quality
             FROM sensor_data
             WHERE device_id = $1
             ORDER BY time DESC
@@ -60,7 +61,7 @@ async def get_sensor_history(
 
 async def get_latest_by_device(device_id: str):
     row = await pool.fetchrow("""
-        SELECT time, device_id, temperature, humidity, pressure, gas, air_quality
+        SELECT time, device_id, temperature, humidity, pressure, pressure_outside, gas, air_quality
         FROM sensor_data
         WHERE device_id = $1
         ORDER BY time DESC
