@@ -1,7 +1,7 @@
 // 대시보드(차트) 탭의 메인 컴포넌트: 실시간 센서값·시계열 차트·구역 선택을 조합한다.
 import { useState, useMemo, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import type { DashboardData, SensorKey, ChartPeriod } from './types'
+import type { DashboardData, SensorKey, SensorMeta, ChartPeriod } from './types'
 import { normalizeSeries } from './normalize'
 import { buildDashboardData, statusFor, type RawPoint } from './deriveDashboard'
 import { PERIOD_OPTIONS, SENSOR_CONFIGS, type PeriodOption } from './constants'
@@ -21,6 +21,10 @@ interface HistoryRow {
   air_quality: number | null
 }
 
+// 선택한 기간에 데이터가 그냥 없는 것(백엔드 404)과 진짜 연결 실패를 구분하기 위한 에러 타입.
+// 예전엔 둘 다 "⚠ 연결 실패"로 뭉뚱그려 보여줘서, 기간을 길게 잡으면 정상인데도 오류처럼 보였다.
+class NoDataError extends Error {}
+
 async function fetchDashboard(deviceId: string, option: PeriodOption): Promise<DashboardData> {
   const to = new Date()
   const from = new Date(to)
@@ -33,6 +37,7 @@ async function fetchDashboard(deviceId: string, option: PeriodOption): Promise<D
   })
   const url = `/api/sensors/${deviceId}/history?${params}`
   const res = await fetch(url)
+  if (res.status === 404) throw new NoDataError('no data')
   if (!res.ok) throw new Error('API error')
   const rows: HistoryRow[] = await res.json()
 
@@ -41,7 +46,7 @@ async function fetchDashboard(deviceId: string, option: PeriodOption): Promise<D
       r.temperature != null && r.humidity != null && r.pressure != null && r.gas != null && r.air_quality != null)
     .map(r => ({ t: r.time, temp: r.temperature, hum: r.humidity, gas: r.gas, pm: r.air_quality, pressure: r.pressure }))
 
-  if (raw.length === 0) throw new Error('no data')
+  if (raw.length === 0) throw new NoDataError('no data')
 
   return buildDashboardData(deviceId, raw)
 }
@@ -81,7 +86,18 @@ const STALE_MS = 15_000
 
 function offlineLabel(lastSeenMs: number): string {
   const sec = Math.floor((Date.now() - lastSeenMs) / 1000)
-  return sec < 60 ? `${sec}초째 데이터 없음` : `${Math.floor(sec / 60)}분째 데이터 없음`
+  if (sec < 60) return `${sec}초째 데이터 없음`
+
+  const min = Math.floor(sec / 60)
+  if (min < 60) return `${min}분째 데이터 없음`
+
+  const hour = Math.floor(min / 60)
+  const remMin = min % 60
+  if (hour < 24) return remMin > 0 ? `${hour}시간 ${remMin}분동안 데이터 없음` : `${hour}시간동안 데이터 없음`
+
+  const day = Math.floor(hour / 24)
+  const remHour = hour % 24
+  return remHour > 0 ? `${day}일 ${remHour}시간동안 데이터 없음` : `${day}일동안 데이터 없음`
 }
 
 interface DashboardProps {
@@ -97,21 +113,23 @@ export function Dashboard({ isDark, zone, onZoneChange }: DashboardProps) {
   const periodOption = PERIOD_OPTIONS.find(o => o.key === period)!
   const deviceId = zoneDeviceId(zone)
 
-  const { data: current, isError } = useQuery<DashboardData>({
+  const { data: current, isError, error } = useQuery<DashboardData>({
     queryKey: ['dashboard', deviceId, period],
     queryFn: () => fetchDashboard(deviceId, periodOption),
     refetchInterval: 10_000,
     retry: false,
   })
+  const noDataForPeriod = error instanceof NoDataError
 
   // 차트(시계열)는 위 쿼리로 느긋하게 갱신하고, 상단 실시간 수치만 짧은 주기로 따로 폴링한다.
   // 데이터 폭을 늘리지 않고도(=차트가 무거워지지 않고도) 체감 실시간성을 확보하기 위함.
-  const { data: live } = useQuery<LiveReading>({
+  // current(선택 기간 히스토리)가 없어도(예: "1일"인데 기기가 하루 넘게 멈춤) 연결 상태 배지는
+  // 계속 보여줘야 하므로, current 존재 여부와 무관하게 항상 폴링한다.
+  const { data: live, isError: liveIsError } = useQuery<LiveReading>({
     queryKey: ['latest', deviceId],
     queryFn: () => fetchLatest(deviceId),
     refetchInterval: 3_000,
     retry: false,
-    enabled: current != null,
   })
 
   // react-query는 폴링 응답 내용이 이전과 동일하면(=센서가 멈춰서 같은 마지막 값만 반복 수신)
@@ -135,6 +153,20 @@ export function Dashboard({ isDark, zone, onZoneChange }: DashboardProps) {
     })
     return { temp: merge('temp'), hum: merge('hum'), gas: merge('gas'), pm: merge('pm'), pressure: merge('pressure') }
   }, [current, live])
+
+  // 선택한 기간엔 히스토리가 없어도(current == null) /latest는 성공한 경우, 차트에 쓸 최소/최대/평균은
+  // 없지만 현재값만이라도 보여줄 수 있게 하는 대체 표시용 데이터(최소/최대/평균은 현재값으로 채움).
+  const liveOnlyCurrent = useMemo((): Record<SensorKey, SensorMeta> | null => {
+    if (!live) return null
+    const build = (key: SensorKey): SensorMeta => {
+      const value = +live[key].toFixed(key === 'gas' ? 0 : 1)
+      const unit = SENSOR_CONFIGS.find(c => c.key === key)!.unit
+      return { value, unit, status: statusFor(key, live[key]), min: value, max: value, avg: value }
+    }
+    return { temp: build('temp'), hum: build('hum'), gas: build('gas'), pm: build('pm'), pressure: build('pressure') }
+  }, [live])
+
+  const displayCurrent = liveCurrent ?? liveOnlyCurrent
 
   const lastSeenMs = live ? new Date(live.time).getTime() : null
   const isOnline = lastSeenMs != null ? Date.now() - lastSeenMs < STALE_MS : null
@@ -168,24 +200,34 @@ export function Dashboard({ isDark, zone, onZoneChange }: DashboardProps) {
         <ZoneSelector value={zone} onChange={onZoneChange} isDark={isDark} />
       </div>
 
-      {!current || !liveCurrent ? (
+      {live == null && !liveIsError && current == null && !isError ? (
+        // 아직 아무 응답도 안 온 최초 로딩
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          height: '60vh', color: textMuted, fontSize: '0.95rem',
+        }}>
+          불러오는 중...
+        </div>
+      ) : live == null ? (
+        // /latest조차 한 번도 성공한 적 없음 — 이 장치에서 데이터를 받은 적이 아예 없거나 백엔드 문제
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           height: '60vh', color: textMuted, fontSize: '0.95rem', flexDirection: 'column', gap: 8,
         }}>
-          <span>{isError ? '⚠ 연결 실패' : '불러오는 중...'}</span>
-          {isError && <span style={{ fontSize: '0.78rem' }}>{deviceId} 장치의 데이터를 가져올 수 없습니다.</span>}
+          <span>⚠ 연결 실패</span>
+          <span style={{ fontSize: '0.78rem' }}>{deviceId} 장치의 데이터를 가져올 수 없습니다.</span>
         </div>
       ) : (
       <>
       <Header
         isDark={isDark}
-        deviceId={current.device_id}
+        deviceId={deviceId}
         isOnline={isOnline}
         offlineLabel={lastSeenMs != null ? offlineLabel(lastSeenMs) : ''}
       />
 
-      {/* 센서값 5개: 차트 위에 가로로 배열(좁아지면 자동 줄바꿈) */}
+      {/* 센서값 5개: 차트 위에 가로로 배열(좁아지면 자동 줄바꿈). current(선택 기간 히스토리)가 없어도
+          /latest만 있으면 현재값은 보여준다(이때 최소/최대/평균·스파크라인은 현재값 하나뿐이라 밋밋함) */}
       <div style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
@@ -196,7 +238,7 @@ export function Dashboard({ isDark, zone, onZoneChange }: DashboardProps) {
           <SensorBox
             key={cfg.key}
             sensorKey={cfg.key}
-            meta={liveCurrent[cfg.key]}
+            meta={displayCurrent![cfg.key]}
             sparkData={sparkData(cfg.key)}
             highlighted={highlightedSensors.length === 0 || highlightedSensors.includes(cfg.key)}
             onClick={handleSensorClick}
@@ -205,7 +247,8 @@ export function Dashboard({ isDark, zone, onZoneChange }: DashboardProps) {
         ))}
       </div>
 
-      {/* 차트 */}
+      {/* 차트 카드: 선택한 기간에 히스토리가 없어도 카드·기간 선택기는 항상 보여줘야 다른 기간으로
+          바꿔볼 수 있다 — 안쪽 내용(차트 vs 안내 문구)만 바뀐다. */}
       <div style={{
         background: cardBg,
         borderRadius: 12,
@@ -216,12 +259,22 @@ export function Dashboard({ isDark, zone, onZoneChange }: DashboardProps) {
         flexDirection: 'column',
       }}>
         <div style={{ flex: 1, minHeight: 0 }}>
-          <SensorChart
-            data={normalized}
-            highlightedSensors={highlightedSensors}
-            isDark={isDark}
-            period={period}
-          />
+          {current ? (
+            <SensorChart
+              data={normalized}
+              highlightedSensors={highlightedSensors}
+              isDark={isDark}
+              period={period}
+            />
+          ) : (
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              height: '100%', color: textMuted, fontSize: '0.9rem', flexDirection: 'column', gap: 6,
+            }}>
+              <span>{noDataForPeriod ? `선택한 기간(${periodOption.label})에는 표시할 데이터가 없습니다` : '불러오는 중...'}</span>
+              {noDataForPeriod && <span style={{ fontSize: '0.78rem' }}>기간을 늘려서 다시 확인해보세요.</span>}
+            </div>
+          )}
         </div>
         <PeriodSelector value={period} options={PERIOD_OPTIONS} onChange={setPeriod} isDark={isDark} />
       </div>
