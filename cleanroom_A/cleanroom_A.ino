@@ -13,7 +13,7 @@ const char* device_id   = "esp32-A1";
 
 #define MQ2_PIN   34
 #define MQ135_PIN 33
-#define INTERVAL  1000  // 3초
+#define INTERVAL  3000  // 3초
 
 // 실외 BME280용 2번째 I2C 버스 핀. 두 센서 모두 SDO 핀이 없는 4핀 모듈이라 주소가 둘 다 0x76으로
 // 고정돼 있음 — 같은 버스에 물리면 주소가 겹쳐서 안 되니, 버스 자체를 분리해서 둘 다 0x76 그대로 쓴다.

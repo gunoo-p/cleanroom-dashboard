@@ -89,7 +89,7 @@ async function fetchLatest(deviceId: string): Promise<LiveReading> {
 
 // 장치가 멈춰도 /latest는 DB에 남아있는 마지막 값을 계속 정상 응답하므로(에러가 안 남),
 // 응답 성공 여부가 아니라 그 값의 시각이 얼마나 오래됐는지로 온라인/오프라인을 판단해야 한다.
-// 실기기(1초)·시뮬레이터(3초) 모두 감안해 여유 있게 15초를 기준으로 잡는다.
+// 실기기 전송 주기(3초)를 감안해 여유 있게 15초를 기준으로 잡는다.
 const STALE_MS = 15_000
 
 function offlineLabel(lastSeenMs: number): string {
