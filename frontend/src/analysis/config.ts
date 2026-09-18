@@ -4,14 +4,21 @@
 // 컴포넌트에는 숫자를 하드코딩하지 말고 이 파일 값을 참조할 것.
 // ─────────────────────────────────────────────────────────────────
 import type { AnalysisPeriod, SensorKey } from './types'
+import { DEVIATION_THRESHOLDS, DIRECT_THRESHOLDS } from '../dashboard/deriveDashboard'
+
+const temp = DEVIATION_THRESHOLDS.temp!
+const gas = DIRECT_THRESHOLDS.gas!
+const air = DIRECT_THRESHOLDS.pm!
+const pressure = DIRECT_THRESHOLDS.pressure!
 
 export const THRESHOLDS = {
-  temp: { warning: 35, danger: 45, axisMin: 15, axisMax: 50 },
-  gas: { warning: 300, danger: 500, axisMin: 0, axisMax: 500 },
+  // 분석 그래프는 상승 방향을 예측하므로 온도의 상한 임계치를 사용한다.
+  temp: { warning: temp.center + temp.warning, danger: temp.center + temp.danger, axisMin: 15, axisMax: 30 },
+  gas: { warning: gas.warning, danger: gas.danger, axisMin: 0, axisMax: 4095 },
   // ⚠ placeholder: 실측 지표(AQI/VOC 등)·단위·임계가 하드웨어/md로 확정되면 교체.
-  air: { warning: 75, danger: 100, axisMin: 0, axisMax: 150 },
+  air: { warning: air.warning, danger: air.danger, axisMin: 0, axisMax: 4095 },
   // 차압(실내-실외, Pa)은 낮을수록 위험(클린룸 양압 붕괴 리스크). 대시보드 탭과 동일한 값 사용.
-  pressure: { warning: 10, danger: 5, axisMin: -30, axisMax: 30 },
+  pressure: { warning: pressure.warning, danger: pressure.danger, axisMin: -30, axisMax: 30 },
 }
 
 export interface AnalysisPeriodOption {
