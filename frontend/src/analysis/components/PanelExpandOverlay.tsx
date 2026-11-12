@@ -11,30 +11,28 @@ type Phase = 'opening' | 'open' | 'closing'
 
 interface Props {
   sourceRect: DOMRect
-  containerRect: DOMRect
-  isDark: boolean
+  // 확대 후 채울 영역. 그리드가 스크롤로 화면 밖까지 이어질 수 있으므로 호출부에서 화면에 보이는 부분으로 잘라서 넘긴다.
+  targetRect: { top: number; left: number; width: number; height: number }
   onClosed: () => void
   children: ReactNode
 }
 
-function targetFrom(containerRect: DOMRect) {
-  return {
-    top: containerRect.top,
-    left: containerRect.left,
-    width: containerRect.width,
-    height: containerRect.height,
-  }
-}
+const prefersReducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
-export function PanelExpandOverlay({ sourceRect, containerRect, isDark, onClosed, children }: Props) {
+export function PanelExpandOverlay({ sourceRect, targetRect, onClosed, children }: Props) {
   const [phase, setPhase] = useState<Phase>('opening')
-  // 클릭 시점의 패널 그리드 영역 기준으로 한 번만 고정 — 애니메이션 도중 다시 계산되지 않게.
-  const [target] = useState(() => targetFrom(containerRect))
+  // 클릭 시점 기준으로 한 번만 고정 — 애니메이션 도중 다시 계산되지 않게.
+  const [target] = useState(targetRect)
 
   useEffect(() => {
     const id = requestAnimationFrame(() => setPhase('open'))
     return () => cancelAnimationFrame(id)
   }, [])
+
+  // 모션 감소 설정이면 transition이 없어서 transitionend가 오지 않는다 — 바로 닫는다.
+  useEffect(() => {
+    if (phase === 'closing' && prefersReducedMotion()) onClosed()
+  }, [phase, onClosed])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setPhase('closing') }
@@ -49,57 +47,32 @@ export function PanelExpandOverlay({ sourceRect, containerRect, isDark, onClosed
   const translateX = sourceRect.left - target.left
   const translateY = sourceRect.top - target.top
 
-  const shrunk = phase !== 'open'
-  const transform = shrunk
-    ? `translate(${translateX}px, ${translateY}px) scale(${scaleX}, ${scaleY})`
-    : 'translate(0, 0) scale(1, 1)'
+  const transform = phase === 'open'
+    ? 'translate(0, 0) scale(1, 1)'
+    : `translate(${translateX}px, ${translateY}px) scale(${scaleX}, ${scaleY})`
 
   return (
     <>
       {/* 배경 클릭으로 닫기 위한 투명 캐처 (덮는 느낌을 위해 어둡게 하지 않는다) */}
-      <div onClick={requestClose} style={{ position: 'fixed', inset: 0, zIndex: 999 }} />
+      <div className="expand-overlay__backdrop" onClick={requestClose} />
 
       <div
+        className="expand-overlay"
+        role="dialog"
+        aria-modal="true"
         onTransitionEnd={e => {
           // 자식(패널 hover 등)의 transitionend가 버블링되어 오는 것과 자기 자신의
           // transform 트랜지션이 끝난 것을 구분한다 — 안 그러면 애니메이션이 중간에 잘린다.
           if (e.target !== e.currentTarget || e.propertyName !== 'transform') return
           if (phase === 'closing') onClosed()
         }}
-        style={{
-          position: 'fixed',
-          top: target.top,
-          left: target.left,
-          width: target.width,
-          height: target.height,
-          transformOrigin: '0 0',
-          transform,
-          transition: 'transform 0.28s cubic-bezier(0.2,0,0,1)',
-          zIndex: 1000,
-          boxShadow: '0 24px 64px rgba(0,0,0,0.35)',
-        }}
+        style={{ top: target.top, left: target.left, width: target.width, height: target.height, transform }}
       >
-        <div style={{ position: 'relative', height: '100%' }}>
-          <button
-            onClick={requestClose}
-            title="닫기 (ESC)"
-            style={{
-              position: 'absolute',
-              top: -14,
-              right: -14,
-              width: 32,
-              height: 32,
-              borderRadius: '50%',
-              border: 'none',
-              background: isDark ? '#1e293b' : '#ffffff',
-              color: isDark ? '#f1f5f9' : '#0f172a',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
-              cursor: 'pointer',
-              fontSize: '1rem',
-              lineHeight: 1,
-            }}
-          >
-            ✕
+        <div className="expand-overlay__inner">
+          <button type="button" className="expand-overlay__close" onClick={requestClose} title="닫기 (ESC)" aria-label="닫기">
+            <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden>
+              <path d="M2 2l10 10M12 2L2 12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+            </svg>
           </button>
           {children}
         </div>

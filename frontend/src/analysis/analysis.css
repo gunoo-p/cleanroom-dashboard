@@ -1,0 +1,505 @@
+/* 통계(분석) 탭 전용 스타일.
+   - 색상은 .analysis-tab의 data-theme 값에 따라 CSS 변수로 전환된다.
+   - 레이아웃 원칙: 화면이 충분히 크면 3개 행이 한 화면을 채우고, 높이가 부족하면 각 행이
+     최소 높이를 지키면서 탭 전체가 세로 스크롤된다(글자·차트가 눌리거나 박스 밖으로 나가지 않게). */
+
+.analysis-tab {
+  --an-bg: #f8fafc;
+  --an-card: #ffffff;
+  --an-border: #e2e8f0;
+  --an-text: #0f172a;
+  --an-muted: #64748b;
+  --an-shadow-hover: 0 4px 16px rgba(15, 23, 42, 0.12);
+  --an-focus: #3b82f6;
+  --an-row-min: 230px;
+  --an-gap: 16px;
+
+  min-height: 100%;
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  background: var(--an-bg);
+  color: var(--an-text);
+  font-family: 'Pretendard', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+}
+
+.analysis-tab[data-theme='dark'] {
+  --an-bg: #0f172a;
+  --an-card: #1e293b;
+  --an-border: #334155;
+  --an-text: #f1f5f9;
+  --an-muted: #94a3b8;
+  --an-shadow-hover: 0 4px 16px rgba(0, 0, 0, 0.35);
+  --an-focus: #60a5fa;
+}
+
+/* ── 헤더 ─────────────────────────────────────────────────────── */
+.analysis-header {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.analysis-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px 16px;
+}
+
+/* 좁은 화면에서 구역 버튼이 글자 단위로 줄바꿈되지 않게: 줄바꿈 대신 가로 스크롤 */
+.analysis-toolbar__zones {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.analysis-toolbar__zones::-webkit-scrollbar {
+  display: none;
+}
+.analysis-toolbar button {
+  white-space: nowrap;
+}
+.analysis-toolbar__periods > div {
+  padding-top: 0 !important;
+}
+
+.analysis-title {
+  font-size: 1.25rem;
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+.analysis-subtitle {
+  margin-top: 2px;
+  font-size: 0.78rem;
+  color: var(--an-muted);
+  overflow-wrap: anywhere;
+}
+
+/* ── 상태(로딩/오류) ──────────────────────────────────────────── */
+.analysis-status {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 48px 16px;
+  color: var(--an-muted);
+  font-size: 0.95rem;
+  text-align: center;
+}
+.analysis-status__detail {
+  font-size: 0.78rem;
+}
+
+/* ── 패널 그리드 ──────────────────────────────────────────────── */
+.analysis-grid {
+  flex: 1 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--an-gap);
+}
+
+/* flex-basis 0으로 남는 높이를 행끼리 똑같이 나눈다. min-height를 0으로 덮어쓰지 않으므로
+   (flex 항목의 기본값 auto = 콘텐츠 높이) 슬롯의 최소 높이나 콘텐츠가 더 크면 행이 늘어나고
+   탭 전체가 스크롤된다 — 글자가 박스 밖으로 넘치지 않는다. */
+.analysis-row {
+  flex: 1 1 0;
+  display: grid;
+  grid-template-columns: repeat(var(--an-cols, 1), minmax(0, 1fr));
+  gap: var(--an-gap);
+}
+
+.analysis-slot {
+  display: flex;
+  min-width: 0;
+  min-height: var(--an-row-min);
+}
+.analysis-slot.is-hidden {
+  visibility: hidden;
+}
+
+/* ── 패널(카드) 공통 ──────────────────────────────────────────── */
+.analysis-panel {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px 12px;
+  background: var(--an-card);
+  border: 1px solid var(--an-border);
+  border-radius: 12px;
+  container-type: inline-size;
+  transition: box-shadow 0.15s ease-out, transform 0.15s ease-out;
+}
+
+.analysis-panel.is-clickable {
+  cursor: pointer;
+}
+.analysis-panel.is-clickable:hover {
+  box-shadow: var(--an-shadow-hover);
+  transform: translateY(-2px);
+}
+.analysis-panel.is-clickable:focus-visible {
+  outline: 2px solid var(--an-focus);
+  outline-offset: 2px;
+}
+
+.analysis-panel.is-expanded {
+  height: 100%;
+  padding: 20px 24px 16px;
+  gap: 14px;
+}
+
+.analysis-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  flex-shrink: 0;
+}
+.analysis-panel.is-expanded .analysis-panel__head {
+  justify-content: center;
+}
+
+.analysis-panel__title {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.85rem;
+  font-weight: 700;
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.analysis-panel.is-expanded .analysis-panel__title {
+  flex: none;
+  font-size: 1.3rem;
+}
+
+.analysis-panel__badge {
+  flex-shrink: 0;
+}
+
+/* 좁은 카드에서는 제목을 줄이지 않고 배지를 제목 아래로 내린다 */
+@container (max-width: 300px) {
+  .analysis-panel__head {
+    flex-wrap: wrap;
+    row-gap: 4px;
+  }
+  .analysis-panel__title {
+    flex-basis: 100%;
+  }
+}
+
+.analysis-panel__body {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── 배지 ─────────────────────────────────────────────────────── */
+.analysis-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1.5;
+  white-space: nowrap;
+  color: var(--badge-fg);
+  background: var(--badge-bg);
+}
+.analysis-tab[data-theme='dark'] .analysis-badge {
+  background: color-mix(in srgb, var(--badge-fg) 14%, transparent);
+}
+
+/* ── 추세 차트 패널 ───────────────────────────────────────────── */
+.trend-chart {
+  flex: 1;
+  min-height: 150px;
+}
+.analysis-panel.is-expanded .trend-chart {
+  min-height: 0;
+}
+
+.stat-strip {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px 32px;
+  flex-shrink: 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--an-border);
+}
+.stat-strip__item {
+  text-align: center;
+}
+.stat-strip__label {
+  margin-bottom: 2px;
+  font-size: 0.75rem;
+  color: var(--an-muted);
+}
+.stat-strip__value {
+  font-size: 1rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── 설비 이상 조짐 카드 ──────────────────────────────────────── */
+.anomaly-metrics {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 12px;
+}
+.anomaly-metric__label {
+  margin-bottom: 2px;
+  font-size: 0.72rem;
+  color: var(--an-muted);
+}
+.anomaly-metric__value {
+  font-size: 0.95rem;
+  font-weight: 700;
+  line-height: 1.35;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.anomaly-metric__lines {
+  display: flex;
+  flex-direction: column;
+}
+
+.analysis-panel.is-expanded .anomaly-metrics {
+  align-items: center;
+  gap: 36px;
+  text-align: center;
+}
+.analysis-panel.is-expanded .anomaly-metric__label {
+  margin-bottom: 6px;
+  font-size: 0.9rem;
+}
+.analysis-panel.is-expanded .anomaly-metric__value {
+  font-size: 1.6rem;
+}
+
+/* ── 상관계수 히트맵 ──────────────────────────────────────────── */
+.heatmap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+.heatmap__main {
+  flex: 1;
+  display: flex;
+  gap: 10px;
+  min-height: 150px;
+}
+.analysis-panel.is-expanded .heatmap__main {
+  min-height: 0;
+}
+
+/* 셀 높이는 aspect-ratio 대신 부모 높이를 벗어날 수 없는 grid 1fr 행으로 고정
+   (브라우저 배율에 따라 aspect-ratio 반올림이 누적되어 박스를 넘어서는 문제 방지). */
+.heatmap__grid {
+  --hm-label-w: 48px;
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: var(--hm-label-w) repeat(5, minmax(0, 1fr));
+  grid-template-rows: auto repeat(5, minmax(18px, 1fr));
+  gap: 4px;
+  font-size: 0.68rem;
+}
+
+.heatmap__row {
+  display: contents;
+}
+
+.heatmap__label {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  color: var(--an-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.heatmap__label--col {
+  justify-content: center;
+}
+
+.heatmap__cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  border-radius: 6px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+}
+
+/* 셀이 좁아지면 숫자를 줄여서 셀 밖으로 넘치지 않게 */
+@container (max-width: 340px) {
+  .heatmap__grid {
+    --hm-label-w: 40px;
+    gap: 3px;
+  }
+  .heatmap__cell {
+    font-size: 0.62rem;
+    border-radius: 4px;
+  }
+  .heatmap__label {
+    font-size: 0.62rem;
+  }
+}
+
+.heatmap__scale {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  align-self: center;
+  height: 80%;
+  font-size: 0.65rem;
+  color: var(--an-muted);
+  font-variant-numeric: tabular-nums;
+}
+.heatmap__scale-bar {
+  flex: 1;
+  width: 10px;
+  margin: 4px 0;
+  border-radius: 6px;
+}
+
+.analysis-panel.is-expanded .heatmap__grid {
+  --hm-label-w: 64px;
+  font-size: 0.85rem;
+}
+.analysis-panel.is-expanded .heatmap__cell {
+  font-size: 1.05rem;
+}
+.analysis-panel.is-expanded .heatmap__scale {
+  font-size: 0.78rem;
+}
+.analysis-panel.is-expanded .heatmap__scale-bar {
+  width: 16px;
+}
+
+.heatmap__top-pairs {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px 28px;
+  flex-shrink: 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--an-border);
+}
+.heatmap__pair {
+  text-align: center;
+}
+.heatmap__pair-label {
+  margin-bottom: 2px;
+  font-size: 0.78rem;
+  color: var(--an-muted);
+}
+.heatmap__pair-value {
+  font-size: 1.1rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── 확대 오버레이 ────────────────────────────────────────────── */
+.expand-overlay__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+}
+.expand-overlay {
+  position: fixed;
+  z-index: 1000;
+  transform-origin: 0 0;
+  transition: transform 0.28s cubic-bezier(0.2, 0, 0, 1);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.35);
+  border-radius: 12px;
+}
+.expand-overlay__inner {
+  position: relative;
+  height: 100%;
+}
+.expand-overlay__close {
+  position: absolute;
+  top: -14px;
+  right: -14px;
+  z-index: 1;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 50%;
+  background: var(--an-card);
+  color: var(--an-text);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+}
+.expand-overlay__close:focus-visible {
+  outline: 2px solid var(--an-focus);
+  outline-offset: 2px;
+}
+
+/* ── 반응형 ───────────────────────────────────────────────────── */
+/* 좁은 화면: 패널을 세로로 쌓고 각 패널은 고정 높이 차트로 */
+@media (max-width: 900px) {
+  .analysis-row {
+    --an-cols: 1 !important;
+    flex: none;
+  }
+  .analysis-slot {
+    min-height: 0;
+  }
+  .trend-chart {
+    flex: none;
+    height: 240px;
+  }
+  .heatmap__main {
+    flex: none;
+    height: 240px;
+  }
+}
+
+@media (max-width: 640px) {
+  .analysis-tab {
+    padding: 16px;
+  }
+  .analysis-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .analysis-toolbar__periods > div {
+    justify-content: flex-start !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .analysis-panel,
+  .expand-overlay {
+    transition: none;
+  }
+  .analysis-panel.is-clickable:hover {
+    transform: none;
+  }
+}
