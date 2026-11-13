@@ -1,6 +1,6 @@
 # 반도체 클린룸 모니터링 프로젝트
 
-ESP32 센서(온도·습도·차압·가스·공기질)로 클린룸 환경을 실시간 모니터링하고, 추세 기반 설비 이상 예측·환경 안정성·과거 이벤트 로그를 보여주는 웹 대시보드. 임계치를 넘으면 텔레그램으로 알림이 가고, 하루치 로그는 Claude API로 자연어 요약을 받아볼 수 있다.
+ESP32 센서(온도·습도·차압·가스·공기질)로 클린룸 환경을 실시간 모니터링하고, 추세 기반 설비 이상 예측·환경 안정성·과거 이벤트 로그를 보여주는 웹 대시보드. 임계치를 넘으면 텔레그램으로 알림이 가고, 하루치 로그는 Gemini API로 자연어 요약을 받아볼 수 있다.
 
 ## 아키텍처
 
@@ -18,7 +18,7 @@ ESP32 (BME280×2 + MQ-2 + MQ135)
                                               ▲
                                               │  조회
                                      query (FastAPI, 8000)
-                                              │  └─▶ Claude API (로그 AI 요약)
+                                              │  └─▶ Gemini API (로그 AI 요약)
                                               ▼
                                      frontend (Vite, 5173)
                                        ├─ 대시보드(차트) 탭   — 실시간 값 + 연결 상태
@@ -27,7 +27,7 @@ ESP32 (BME280×2 + MQ-2 + MQ135)
 ```
 
 - **ingestion**: 센서 데이터 수신(HTTP + MQTT) → TimescaleDB 저장. 매 판독마다 임계치를 체크해 상태가 바뀌는 순간(정상↔경고↔위험)에 텔레그램으로 알림 발송
-- **query**: TimescaleDB 조회 API(기간별 조회, `time_bucket` 집계) + 로그 캘린더용 AI 요약 API(Claude API 호출)
+- **query**: TimescaleDB 조회 API(기간별 조회, `time_bucket` 집계) + 로그 캘린더용 AI 요약 API(Gemini API 호출)
 - **mosquitto**: MQTT 브로커 (`listener 1883`, `allow_anonymous true`)
 - **frontend**: React + Vite. 대시보드·통계(분석)·로그 캘린더 3개 탭으로 구성
 
@@ -51,7 +51,7 @@ cd frontend && npm install && npm run dev   # http://localhost:5173
 AI 요약·텔레그램 알림 없이도 앱 자체는 정상 동작한다. 두 기능을 쓰려면 루트 `.env`에 아래 값을 채워야 한다:
 
 ```bash
-ANTHROPIC_API_KEY=     # Claude API 키 (console.anthropic.com)
+GEMINI_API_KEY=        # Gemini API 키 (aistudio.google.com)
 TELEGRAM_BOT_TOKEN=    # @BotFather로 발급받은 봇 토큰
 TELEGRAM_CHAT_ID=      # 알림 받을 채팅방(개인/그룹) id
 ```
@@ -102,7 +102,7 @@ DB 스키마(`infra/init.sql`): `sensor_data(time, device_id, temperature, humid
 
 - **센서별/상태별 필터**: 전체·위험·경고·정상 탭과 온도/습도/가스/공기질/차압 드롭다운을 조합해서 볼 수 있다.
 - **CSV 내보내기**: 현재 필터에 걸린 로그만 UTF-8 BOM 포함 CSV로 다운로드(엑셀 한글 깨짐 방지).
-- **AI 요약**: "✨ AI로 하루 요약 보기" 버튼을 누르면 그날 집계(위험/경고/정상 건수, 센서별 내역)를 Claude API(`claude-haiku-4-5`)에 보내 2~3문장 한국어 요약을 받아온다. 열 때 자동 호출하지 않고 버튼을 눌러야 호출되며, 같은 날짜는 세션 내에서 재호출하지 않는다(비용 관리). API 키는 `query` 서비스에서만 다루고 프론트엔드에는 노출되지 않는다.
+- **AI 요약**: "✨ AI로 하루 요약 보기" 버튼을 누르면 그날 집계(위험/경고/정상 건수, 센서별 내역)를 Gemini API(`gemini-2.5-flash`)에 보내 2~3문장 한국어 요약을 받아온다. 열 때 자동 호출하지 않고 버튼을 눌러야 호출되며, 같은 날짜는 세션 내에서 재호출하지 않는다(비용 관리). API 키는 `query` 서비스에서만 다루고 프론트엔드에는 노출되지 않는다.
 
 ## 알림(텔레그램)
 

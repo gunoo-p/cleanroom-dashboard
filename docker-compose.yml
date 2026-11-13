@@ -6,7 +6,7 @@ services:
       POSTGRES_PASSWORD: password
       POSTGRES_DB: sensordb
     ports:
-      - "5433:5432"
+      - "5434:5432"
     volumes:
       - timescale_data:/var/lib/postgresql/data
       - ./infra/init.sql:/docker-entrypoint-initdb.d/init.sql
@@ -36,7 +36,7 @@ services:
     build: ./services/query
     environment:
       DB_URL: postgresql://admin:password@timescaledb:5432/sensordb
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
     ports:
       - "8000:8000"
     depends_on:

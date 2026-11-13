@@ -1,13 +1,17 @@
+import os
 from typing import Optional
-from anthropic import AsyncAnthropic
+from google import genai
+from google.genai import types
 
-_client: Optional[AsyncAnthropic] = None
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
+
+_client: Optional[genai.Client] = None
 
 
-def _get_client() -> AsyncAnthropic:
+def _get_client() -> genai.Client:
     global _client
     if _client is None:
-        _client = AsyncAnthropic()
+        _client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
     return _client
 
 
@@ -32,12 +36,13 @@ async def generate_day_summary(
         "제목이나 마크다운 서식(#, *, - 등) 없이 순수한 문장 2~3개로만 답하세요."
     )
 
-    response = await _get_client().messages.create(
-        model="claude-haiku-4-5",
-        max_tokens=300,
-        messages=[{"role": "user", "content": prompt}],
+    response = await _get_client().aio.models.generate_content(
+        model=GEMINI_MODEL,
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            max_output_tokens=300,
+            # 2.5 계열은 thinking 토큰이 출력 한도를 먹으므로 끄고 요약만 받는다.
+            thinking_config=types.ThinkingConfig(thinking_budget=0),
+        ),
     )
-    for block in response.content:
-        if block.type == "text":
-            return block.text.strip()
-    return ""
+    return (response.text or "").strip()
