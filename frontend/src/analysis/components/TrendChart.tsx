@@ -45,7 +45,9 @@ export function TrendChart({ data, unit, isDark, rawColor, maColor, warning, dan
 
   return (
     <ResponsiveContainer width="100%" height="100%" debounce={200}>
-      <ComposedChart data={data.points} margin={{ top: 6, right: 8, left: -12, bottom: 0 }}>
+      {/* X축 눈금 라벨("14시")은 눈금 위치 기준 가운데 정렬이라, 마지막 눈금이 오른쪽 끝에 오면
+          라벨의 절반이 SVG 밖으로 나가 '시'가 잘린다 — 오른쪽 여백을 라벨 반폭 이상으로 확보한다. */}
+      <ComposedChart data={data.points} margin={{ top: 6, right: expanded ? 22 : 16, left: -12, bottom: 0 }}>
         <XAxis
           dataKey="t"
           tickFormatter={formatHour}
