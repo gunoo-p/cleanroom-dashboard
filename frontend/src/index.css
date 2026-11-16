@@ -20,4 +20,28 @@ body {
     z-index: 100;
     box-shadow: 4px 0 16px rgba(0, 0, 0, 0.15);
   }
+
+  /* 닫힌 사이드바(60px)가 오버레이로 본문 왼쪽을 덮지 않게 비워둔다 */
+  main {
+    padding-left: 60px;
+  }
+
+  /* 로그 캘린더: 캘린더·요약 카드를 세로로 쌓고 페이지 스크롤 허용 */
+  .logcal-root {
+    height: auto !important;
+    min-height: 100vh;
+    overflow: visible !important;
+    padding: 16px 12px !important;
+  }
+  .dash-root {
+    padding: 16px 12px !important;
+  }
+  .logcal-grid {
+    grid-template-columns: 1fr !important;
+    align-content: start;
+  }
+  .logcal-calendar {
+    height: 440px;
+    min-width: 0;
+  }
 }

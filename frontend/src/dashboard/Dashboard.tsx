@@ -195,7 +195,7 @@ export function Dashboard({ isDark, zone, onZoneChange }: DashboardProps) {
   const textMuted = isDark ? '#64748b' : '#94a3b8'
 
   return (
-    <div style={{
+    <div className="dash-root" style={{
       minHeight: '100vh',
       background: bg,
       color: isDark ? '#f1f5f9' : '#0f172a',
@@ -238,7 +238,7 @@ export function Dashboard({ isDark, zone, onZoneChange }: DashboardProps) {
           /latest만 있으면 현재값은 보여준다(이때 최소/최대/평균·스파크라인은 현재값 하나뿐이라 밋밋함) */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
         gap: 12,
         marginBottom: 16,
       }}>
