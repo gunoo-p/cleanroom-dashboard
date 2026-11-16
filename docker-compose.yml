@@ -36,7 +36,7 @@ services:
     build: ./services/query
     environment:
       DB_URL: postgresql://admin:password@timescaledb:5432/sensordb
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
     ports:
       - "8000:8000"
     depends_on:
