@@ -1,4 +1,4 @@
-// 로그 캘린더 하루치 로그를 Claude API로 자연어 요약하는 백엔드 호출(API 키는 서버에서만 사용).
+// 로그 캘린더 하루치 로그를 Gemini API로 자연어 요약하는 백엔드 호출(API 키는 서버에서만 사용).
 export interface DaySummaryRequest {
   date: string
   zoneLabel: string

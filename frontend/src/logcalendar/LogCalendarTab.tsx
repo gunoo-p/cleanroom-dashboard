@@ -95,7 +95,7 @@ export function LogCalendarTab({ isDark, zone, onZoneChange }: TabProps) {
   }
 
   return (
-    <div style={{
+    <div className="logcal-root" style={{
       height: '100vh',
       overflow: 'hidden',
       background: bg,
@@ -112,9 +112,9 @@ export function LogCalendarTab({ isDark, zone, onZoneChange }: TabProps) {
       </div>
 
       {/* 캘린더 카드 + 이번 달 요약 카드 */}
-      <div style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: '1fr 260px', gap: 16 }}>
+      <div className="logcal-grid" style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: '1fr 260px', gap: 16 }}>
         {/* 캘린더 카드 */}
-        <div style={{ ...cardStyle, padding: '16px 16px 14px', display: 'flex', flexDirection: 'column' }}>
+        <div className="logcal-calendar" style={{ ...cardStyle, padding: '16px 16px 14px', display: 'flex', flexDirection: 'column' }}>
           {/* 헤더 */}
           <div style={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16,
@@ -144,7 +144,7 @@ export function LogCalendarTab({ isDark, zone, onZoneChange }: TabProps) {
           ) : (
           <>
           {/* 요일 헤더 */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', flexShrink: 0, marginBottom: 6 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', flexShrink: 0, marginBottom: 6 }}>
             {DOW.map((d, i) => (
               <div
                 key={d}
@@ -163,7 +163,7 @@ export function LogCalendarTab({ isDark, zone, onZoneChange }: TabProps) {
             flex: 1,
             minHeight: 0,
             display: 'grid',
-            gridTemplateColumns: 'repeat(7, 1fr)',
+            gridTemplateColumns: 'repeat(7, minmax(0, 1fr))',
             gridTemplateRows: `repeat(${rowCount}, 1fr)`,
             gap: 8,
           }}>
