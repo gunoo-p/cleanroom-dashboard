@@ -5,6 +5,7 @@ import { EquipmentAnomalyCard } from './EquipmentAnomalyCard'
 import { CorrelationHeatmap } from './CorrelationHeatmap'
 import { THRESHOLDS, LABELS, COLORS } from '../config'
 import type { AnalysisView, TrendPanelData } from '../deriveAnalysis'
+import type { ForecastData, ForecastKey } from '../types'
 
 export type PanelKey = 'temp' | 'gas' | 'anomaly' | 'air' | 'pressure' | 'correlation'
 
@@ -16,6 +17,8 @@ export const PANEL_ROWS: PanelKey[][] = [
 ]
 
 type TrendKey = 'temp' | 'gas' | 'air' | 'pressure'
+
+const FORECAST_KEY: Record<TrendKey, ForecastKey> = { temp: 'temp', gas: 'gas', air: 'pm', pressure: 'pressure' }
 
 interface TrendConfig {
   title: string
@@ -55,9 +58,10 @@ interface Props {
   isDark: boolean
   onClick?: () => void
   expanded?: boolean
+  forecast?: ForecastData
 }
 
-export function AnalysisPanel({ panelKey, view, isDark, onClick, expanded = false }: Props) {
+export function AnalysisPanel({ panelKey, view, isDark, onClick, expanded = false, forecast }: Props) {
   if (panelKey === 'anomaly') {
     return <EquipmentAnomalyCard data={view.equipmentAnomaly} onClick={onClick} expanded={expanded} />
   }
@@ -71,6 +75,7 @@ export function AnalysisPanel({ panelKey, view, isDark, onClick, expanded = fals
     <TrendPanel
       {...cfg}
       data={select(view)}
+      forecast={forecast?.series[FORECAST_KEY[panelKey]].points}
       isDark={isDark}
       warning={t.warning}
       danger={t.danger}

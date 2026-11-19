@@ -3,8 +3,8 @@
 import { useCallback, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import type { TabProps } from '../tabs'
-import type { AnalysisData, AnalysisPeriod } from './types'
-import { fetchAnalysis } from './api'
+import type { AnalysisData, AnalysisPeriod, ForecastData } from './types'
+import { fetchAnalysis, fetchForecast } from './api'
 import { deriveAnalysis } from './deriveAnalysis'
 import { PERIOD_OPTIONS } from './config'
 import { AnalysisHeader } from './components/AnalysisHeader'
@@ -47,6 +47,15 @@ export function AnalysisTab({ isDark, zone, onZoneChange }: TabProps) {
     refetchInterval: 60_000,
     retry: false,
   })
+
+  // AI 예측은 실패해도 기존 화면을 막지 않도록 분석 데이터와 따로 불러온다.
+  const forecastQuery = useQuery<ForecastData>({
+    queryKey: ['forecast', deviceId, period],
+    queryFn: () => fetchForecast(deviceId, periodOption),
+    refetchInterval: 60_000,
+    retry: false,
+  })
+  const forecast = forecastQuery.data
 
   const view = useMemo(() => current ? deriveAnalysis(current) : null, [current])
 
@@ -91,6 +100,7 @@ export function AnalysisTab({ isDark, zone, onZoneChange }: TabProps) {
                     panelKey={key}
                     view={view}
                     isDark={isDark}
+                    forecast={forecast}
                     onClick={expanded ? undefined : () => openPanel(key)}
                   />
                 </div>
@@ -102,7 +112,7 @@ export function AnalysisTab({ isDark, zone, onZoneChange }: TabProps) {
 
       {expanded && view && (
         <PanelExpandOverlay sourceRect={expanded.sourceRect} targetRect={expanded.targetRect} onClosed={closePanel}>
-          <AnalysisPanel panelKey={expanded.key} view={view} isDark={isDark} expanded />
+          <AnalysisPanel panelKey={expanded.key} view={view} isDark={isDark} forecast={forecast} expanded />
         </PanelExpandOverlay>
       )}
     </div>
