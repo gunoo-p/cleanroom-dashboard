@@ -31,11 +31,14 @@ const MAX_DOTS = 4
 interface DotsProps {
   danger: number
   warning: number
+  hasData: boolean
 }
 
-// 위험/경고가 하나도 없는(=정상만 있는) 날은 점을 아예 그리지 않는다.
-export function Dots({ danger, warning }: DotsProps) {
-  if (danger === 0 && warning === 0) return null
+// 측정은 있는데 위험/경고가 없는 날은 초록 점 하나, 측정 자체가 없는 날은 아무것도 그리지 않는다.
+export function Dots({ danger, warning, hasData }: DotsProps) {
+  if (danger === 0 && warning === 0) {
+    return hasData ? <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#1D9E75' }} /> : null
+  }
 
   const items: LogStatus[] = [
     ...Array(Math.min(danger, MAX_DOTS)).fill('danger' as const),

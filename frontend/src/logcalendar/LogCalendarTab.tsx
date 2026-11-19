@@ -20,6 +20,7 @@ interface DayCell {
   day: number
   danger: number
   warning: number
+  total: number
 }
 
 const SUMMARY_ITEMS: { status: LogStatus; label: string; color: string; bg: string }[] = [
@@ -52,7 +53,7 @@ export function LogCalendarTab({ isDark, zone, onZoneChange }: TabProps) {
     const counts = monthRows ? computeMonthDayCounts(monthRows) : {}
     const days: DayCell[] = []
     for (let day = 1; day <= daysInMonth; day++) {
-      const c = counts[day] ?? { danger: 0, warning: 0 }
+      const c = counts[day] ?? { danger: 0, warning: 0, total: 0 }
       days.push({ day, ...c })
     }
     return days
@@ -63,7 +64,7 @@ export function LogCalendarTab({ isDark, zone, onZoneChange }: TabProps) {
     for (const d of monthDays) {
       if (d.danger > 0) counts.danger++
       else if (d.warning > 0) counts.warning++
-      else counts.normal++
+      else if (d.total > 0) counts.normal++
     }
     return counts
   }, [monthDays])
@@ -171,7 +172,7 @@ export function LogCalendarTab({ isDark, zone, onZoneChange }: TabProps) {
               <div key={`empty-${i}`} />
             ))}
 
-            {monthDays.map(({ day, danger, warning }) => {
+            {monthDays.map(({ day, danger, warning, total }) => {
               const dow = (firstDay + day - 1) % 7
               const cellBg = danger > 0
                 ? (isDark ? '#7f1d1d26' : '#fef0f0')
@@ -207,7 +208,7 @@ export function LogCalendarTab({ isDark, zone, onZoneChange }: TabProps) {
                   }}
                 >
                   <span style={{ fontSize: '0.8rem', fontWeight: 600, color: dayColor }}>{day}</span>
-                  <Dots danger={danger} warning={warning} />
+                  <Dots danger={danger} warning={warning} hasData={total > 0} />
                 </div>
               )
             })}
