@@ -1,6 +1,6 @@
 // 통계(분석) 탭이 백엔드에서 원시 시계열 데이터를 가져오는 API 호출.
 // 전용 /api/analysis 엔드포인트는 없어서, 대시보드와 같은 /api/sensors/{id}/history를 재사용한다.
-import type { AnalysisData } from './types'
+import type { AnalysisData, ForecastData, InsightRequest } from './types'
 import type { AnalysisPeriodOption } from './config'
 import { buildDashboardData, type RawPoint } from '../dashboard/deriveDashboard'
 
@@ -19,17 +19,19 @@ function pressureDiffPa(inside: number, outside: number): number {
   return (inside - outside) * 100
 }
 
-export async function fetchAnalysis(deviceId: string, period: AnalysisPeriodOption): Promise<AnalysisData> {
+function rangeParams(period: AnalysisPeriodOption): URLSearchParams {
   const to = new Date()
   const from = new Date(to)
   from.setDate(from.getDate() - period.days)
-
-  const params = new URLSearchParams({
+  return new URLSearchParams({
     from: from.toISOString(),
     to: to.toISOString(),
     interval_minutes: String(period.intervalMinutes),
   })
-  const url = `/api/sensors/${deviceId}/history?${params}`
+}
+
+export async function fetchAnalysis(deviceId: string, period: AnalysisPeriodOption): Promise<AnalysisData> {
+  const url = `/api/sensors/${deviceId}/history?${rangeParams(period)}`
   const res = await fetch(url)
   if (!res.ok) throw new Error('API error')
   const rows: HistoryRow[] = await res.json()
@@ -42,4 +44,20 @@ export async function fetchAnalysis(deviceId: string, period: AnalysisPeriodOpti
   if (raw.length === 0) throw new Error('no data')
 
   return { device_id: deviceId, points: buildDashboardData(deviceId, raw).points }
+}
+
+export async function fetchForecast(deviceId: string, period: AnalysisPeriodOption): Promise<ForecastData> {
+  const res = await fetch(`/api/analysis/${deviceId}/forecast?${rangeParams(period)}`)
+  if (!res.ok) throw new Error('AI 예측 실패')
+  return res.json()
+}
+
+export async function fetchInsight(body: InsightRequest): Promise<string> {
+  const res = await fetch('/api/analysis/insight', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) throw new Error('AI 해설 생성 실패')
+  return (await res.json()).summary
 }

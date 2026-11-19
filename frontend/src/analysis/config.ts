@@ -53,6 +53,7 @@ export const COLORS = {
   pressureRaw: '#94a3b8',
   pressureMA: '#F59E0B',
   regression: '#EC4899',
+  forecast: '#8B5CF6',
   danger: '#E0473C',
   warning: '#C77A0A',
   normal: '#1D9E75',
@@ -78,4 +79,11 @@ export const SEVERITY_COLORS: Record<'normal' | 'warning' | 'danger', { bg: stri
   normal: { bg: '#D1FAE5', text: '#1D9E75' },
   warning: { bg: '#FEF3C7', text: '#C77A0A' },
   danger: { bg: '#FEE2E2', text: '#E0473C' },
+}
+
+// AI 예측·해설에 쓰인 모델 표기와 해설 캐시 시간(Gemini 쿼터 보호 — 60초 갱신을 따라가지 않는다).
+export const AI = {
+  forecastModel: 'Holt-Winters 지수평활 · statsmodels',
+  insightModel: 'Gemini',
+  insightStaleMs: 600_000,
 }

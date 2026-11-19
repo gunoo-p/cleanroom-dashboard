@@ -16,3 +16,21 @@ export type Severity = 'normal' | 'warning' | 'danger'
 
 // 분석 탭 조회 기간 — 대시보드 탭과 달리 이동평균·회귀 계산에 의미 있는 범위만 제공한다.
 export type AnalysisPeriod = '1d' | '7d' | '30d'
+
+// 백엔드 Holt-Winters 예측(/api/analysis/{id}/forecast). 공기질은 백엔드 키도 'pm'.
+export interface ForecastPoint { t: string; value: number; lower: number; upper: number }
+export interface ForecastSeries { model: string; points: ForecastPoint[] }
+export type ForecastKey = 'temp' | 'gas' | 'pm' | 'pressure'
+export interface ForecastData { series: Record<ForecastKey, ForecastSeries> }
+
+// Gemini 해설 요청(/api/analysis/insight). 임계 판정은 프론트에서 끝내고 결과만 보낸다.
+export interface InsightSensor {
+  sensor: string
+  unit: string
+  current: number
+  status: Severity
+  rate_per_hour: number
+  eta_hours: number | null
+  forecast_end: number | null
+}
+export interface InsightRequest { zone_label: string; period_label: string; sensors: InsightSensor[] }
