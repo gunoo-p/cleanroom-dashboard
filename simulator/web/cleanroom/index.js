@@ -9,6 +9,7 @@ import * as THREE from 'three'
 import { buildRoom, ROOM } from './room.js'
 import { buildEquipment, curtainMaterial, flowCurtains } from './equipment.js'
 import { buildWorkers } from './workers.js'
+import { buildEffects } from './effects.js'
 import { setScreensAlarm, resetScreens } from './parts.js'
 
 // 시나리오별 공기 커튼 색·흐름 속도
@@ -34,12 +35,8 @@ export function buildCleanroom() {
   const lamps = []
   root.traverse((o) => { if (o.isMesh && o.name.endsWith('_lamp')) lamps.push(o) })
 
-  // 차압: 문이 방 안쪽으로 열렸다 닫힘 (GLB의 'pressure' 클립과 같은 방식)
-  const yAxis = new THREE.Vector3(0, 1, 0)
-  const q = (a) => new THREE.Quaternion().setFromAxisAngle(yAxis, a).toArray()
-  const doorClip = new THREE.AnimationClip('pressure', 3, [
-    new THREE.QuaternionKeyframeTrack('door.quaternion', [0, 0.9, 2.1, 3], [...q(0), ...q(-1.15), ...q(-1.15), ...q(0)]),
-  ])
+  // 시나리오별 효과 (연기·물방울·웅덩이·먼지·화살표·계기 등). 차압 때 문은 열지 않고 덜컹거리기만 한다.
+  const effects = buildEffects(root)
 
   let scenario = 'normal'
   let curtain = CURTAIN.normal
@@ -53,8 +50,10 @@ export function buildCleanroom() {
       const alarm = scenario !== 'normal'
       setScreensAlarm(alarm)
       workers.setScenario(scenario)
+      effects.setScenario(scenario)
     },
     update(dt, t) {
+      effects.update(dt, t)
       flowCurtains(dt, curtain.speed)
       curtainMaterial.color.lerp(targetColor, Math.min(1, dt * 3))
       curtainMaterial.opacity += (curtain.opacity - curtainMaterial.opacity) * Math.min(1, dt * 3)
@@ -72,13 +71,13 @@ export function buildCleanroom() {
       }
     },
     info() {
-      return { workers: workers.summary(), curtainSpeed: curtain.speed }
+      return { workers: workers.summary(), effects: effects.summary(), curtainSpeed: curtain.speed }
     },
   }
 
   return {
     root,
-    clips: [doorClip],
+    clips: [],
     hooks,
     anchors: { beacon: new THREE.Vector3(ROOM.door.x, ROOM.door.h + 0.55, ROOM.minZ + ROOM.wallT + 0.12) },
     view: { azimuth: 40, elevation: 33, fov: 30, fit: 1.0 },

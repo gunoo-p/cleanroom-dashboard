@@ -11,8 +11,6 @@ import { COLOR, MAT, rbox, cyl } from './parts.js'
 const SUIT = new THREE.MeshStandardMaterial({ color: 0xfbfcfd, roughness: 0.62 })
 const SUIT_SHADE = new THREE.MeshStandardMaterial({ color: 0xe9eef4, roughness: 0.7 })
 const GLOVE = new THREE.MeshStandardMaterial({ color: COLOR.glove, roughness: 0.5 })
-const VISOR = new THREE.MeshStandardMaterial({ color: 0x24506a, roughness: 0.08, metalness: 0.35 })
-const EYE_WHITE = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.3, emissive: 0xffffff, emissiveIntensity: 0.25 })
 const PUPIL = new THREE.MeshStandardMaterial({ color: 0x1b2430, roughness: 0.3 })
 const SHINE = new THREE.MeshBasicMaterial({ color: 0xffffff })
 const BLUSH = new THREE.MeshBasicMaterial({ color: 0xffa8b8, transparent: true, opacity: 0.75 })
@@ -105,23 +103,15 @@ function buildWorker(name, badgeColor = BADGES[0]) {
   rim.position.z = -0.04
   rim.scale.set(1.0, 0.94, 1.0)
   head.add(rim)
-  // 고글(얼굴 앞 둥근 창): 구의 앞쪽 일부만 잘라 쓴다
-  const visor = new THREE.Mesh(
-    new THREE.SphereGeometry(0.312, 32, 16, Math.PI * 0.5 - 0.62, 1.24, Math.PI * 0.5 - 0.42, 0.62),
-    VISOR,
-  )
-  visor.name = `${name}_visor`
-  visor.scale.set(1.0, 0.94, 0.98)
-  head.add(visor)
-  // 동그란 눈 (흰자 + 눈동자 + 반짝임) — 깜빡일 때 eyes 그룹을 납작하게
+  // 얼굴은 작업복과 같은 흰색 그대로 두고, 까만 동그란 눈 + 작은 반짝임 점
+  // (깜빡일 때 eyes 그룹을 납작하게)
   const eyes = new THREE.Group()
-  eyes.position.set(0, 0.04, 0.3) // 고글 표면보다 살짝 앞에
+  eyes.position.set(0, 0.04, 0.278) // 후드 표면에 살짝 박히게
   for (const side of [-1, 1]) {
     const eye = new THREE.Group()
     eye.position.set(0.095 * side, 0, 0)
-    eye.add(sphere(`${name}_eye`, 0.055, EYE_WHITE, 0, 0, 0, 1, 1.15, 0.5))
-    eye.add(sphere(`${name}_pupil`, 0.032, PUPIL, 0, -0.004, 0.022, 1, 1.15, 0.5))
-    eye.add(sphere(`${name}_shine`, 0.011, SHINE, 0.012, 0.018, 0.04))
+    eye.add(sphere(`${name}_eye`, 0.042, PUPIL, 0, 0, 0, 1, 1.25, 0.55))
+    eye.add(sphere(`${name}_shine`, 0.012, SHINE, 0.013, 0.02, 0.022))
     eye.rotation.y = 0.32 * side // 둥근 얼굴을 따라 바깥으로 살짝 돌림
     eyes.add(eye)
   }

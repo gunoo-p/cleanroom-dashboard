@@ -259,25 +259,42 @@ def selftest(window, api, result):
             check("온도: 부채질·걱정·다급한 작업으로 나뉨",
                   acts.get("fan", 0) >= 3 and acts.get("worried", 0) >= 1 and acts.get("work_fast") == 1, str(w))
 
+            def fx():
+                return info()["model"]["effects"]
+
             click("humidity")
             w = wait_workers(lambda w: w["acts"].get("umbrella") == 7)
             check("습도: 7명 우산 펼침", w["acts"].get("umbrella") == 7, str(w))
+            time.sleep(4)  # 웅덩이·김서림·습도계가 차오를 시간
+            e = fx()
+            check("습도 효과: 물방울·웅덩이·김서림·습도계 상승",
+                  e["dropsAlive"] > 0 and e["puddle"] > 0.3 and e["windowFog"] > 0.3 and e["humidityGauge"] > 52, str(e))
 
             click("gas")
             w = wait_workers(lambda w: w["acts"].get("cover") == 7)
             check("가스: 7명 입 막고 문 앞 대피", w["acts"].get("cover") == 7, str(w))
+            check("가스 효과: 연기 덩어리", fx()["gasAlive"] > 5, str(fx()))
 
             # 위험이 연달아 바뀌면 대피한 자리에서 바로 다음 행동으로
             click("pressure")
+            time.sleep(1.0)
+            check("가스→차압 전환 1초 안에 연기 정리", fx()["gasAlive"] == 0, str(fx()))
             w = wait_workers(lambda w: w["acts"].get("push") == 3 and w["modes"].get("act") == 7)
             check("차압(연속 전환): 3명 문 밀기 + 4명 걱정",
                   w["acts"].get("push") == 3 and w["acts"].get("worried") == 4, str(w))
+            e = fx()
+            check("차압 효과: 유입 화살표·차압계 하락(5Pa 미만)", e["arrowsAlive"] > 3 and e["pressureGauge"] < 5, str(e))
+            check("차압 때 문은 열리지 않음 (덜컹만)", abs(e["doorAngle"]) < 0.1, f"문 각도={e['doorAngle']}")
 
             click("air_quality")
             w = wait_workers(lambda w: w["modes"].get("act") == 7)
             check("공기질: 기침·먼지 휘젓기", w["acts"].get("cough", 0) >= 3 and w["acts"].get("swat", 0) >= 3, str(w))
+            time.sleep(1.5)
+            check("공기질 효과: 먼지 덩어리", fx()["dustAlive"] > 3, str(fx()))
 
             click("normal")
+            time.sleep(1.0)
+            check("공기질→정상 전환 1초 안에 먼지 정리", fx()["dustAlive"] == 0, str(fx()))
             w = wait_workers(home, 25)
             check("정상 복귀 시 제자리 작업", bool(home(w)), str(w))
 
@@ -305,6 +322,7 @@ def main():
     parser.add_argument("--selftest", action="store_true", help="버튼·3D·전송 연동을 자동 점검하고 종료")
     args = parser.parse_args()
 
+
     api = Api()
     window = webview.create_window(
         "클린룸 센서 시뮬레이터 3D",
@@ -314,6 +332,9 @@ def main():
         height=860,
         min_size=(980, 720),
         background_color="#0d1117",
+        # 점검 중 창이 다른 창에 완전히 가려지면 Windows(WebView2)가 그리기를 멈춰
+        # 작업자·효과가 멈춘 채로 판정된다 → 점검할 때만 항상 맨 위에 띄운다.
+        on_top=args.selftest,
     )
     api._window = window
     # 창을 닫으면 전송 루프도 멈춘다.
