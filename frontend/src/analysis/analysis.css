@@ -503,3 +503,23 @@
     transform: none;
   }
 }
+
+/* AI 분석 카드 */
+.ai-insight__text {
+  flex: 1;
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.65;
+  color: var(--an-text);
+}
+.ai-insight__text.is-muted {
+  color: var(--an-muted);
+}
+.analysis-panel.is-expanded .ai-insight__text {
+  font-size: 1.05rem;
+}
+.ai-insight__models {
+  margin: 0;
+  font-size: 0.72rem;
+  color: var(--an-muted);
+}

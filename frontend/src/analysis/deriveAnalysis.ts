@@ -1,8 +1,10 @@
 // 원시 시계열로부터 설비 이상·환경 안정성 추세 등 분석 지표를 계산한다.
-import type { AnalysisData, Severity, SensorKey } from './types'
-import { THRESHOLDS, TREND } from './config'
+import type { AnalysisData, Severity, SensorKey, ForecastData, ForecastKey, InsightRequest } from './types'
+import { THRESHOLDS, TREND, LABELS } from './config'
 import { movingAverage, linearRegression, pearsonCorrelation, etaToThreshold } from './calc'
 import { statusFor } from '../dashboard/deriveDashboard'
+import { STATUS_LABELS } from '../dashboard/constants'
+import type { Zone } from '../shared/zone'
 
 // ── 설비 이상 예측 (행 1) ───────────────────────────────────────────
 export interface TrendPanelPoint { t: string; raw: number; ma: number }
@@ -129,5 +131,40 @@ export function deriveAnalysis(data: AnalysisData): AnalysisView {
     equipmentAnomaly: buildEquipmentAnomaly(data),
     trends: { air: buildAirTrend(data), pressure: buildPressureTrend(data) },
     correlationMatrix: buildCorrelationMatrix(data),
+  }
+}
+
+// ── AI 해설 요청 본문 ───────────────────────────────────────────
+// 임계 판정은 프론트(config.ts)가 단일 출처라, 판정까지 끝낸 요약만 Gemini 쪽으로 보낸다.
+const round1 = (v: number) => Math.round(v * 10) / 10
+
+export function buildInsightRequest(
+  view: AnalysisView,
+  forecast: ForecastData | undefined,
+  zone: Zone,
+  periodLabel: string,
+): InsightRequest {
+  const sensors: { key: ForecastKey; label: string; unit: string; data: TrendPanelData }[] = [
+    { key: 'temp', label: '온도', unit: '°C', data: view.equipmentAnomaly.temp },
+    { key: 'gas', label: '가스', unit: '', data: view.equipmentAnomaly.gas },
+    { key: 'pm', label: '공기질', unit: LABELS.air.unit, data: view.trends.air },
+    { key: 'pressure', label: '차압', unit: 'Pa', data: view.trends.pressure },
+  ]
+  return {
+    zone_label: `${zone}구역`,
+    period_label: periodLabel,
+    sensors: sensors.map(({ key, label, unit, data }) => {
+      const points = forecast?.series[key].points ?? []
+      const end = points[points.length - 1]?.value
+      return {
+        sensor: label,
+        unit,
+        current: round1(data.latestValue),
+        status: STATUS_LABELS[statusFor(key, data.latestValue)],
+        rate_per_hour: round1(data.ratePerHour),
+        eta_hours: data.etaHours == null ? null : round1(data.etaHours),
+        forecast_end: end == null ? null : round1(end),
+      }
+    }),
   }
 }

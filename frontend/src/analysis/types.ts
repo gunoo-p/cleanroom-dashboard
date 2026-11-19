@@ -28,7 +28,7 @@ export interface InsightSensor {
   sensor: string
   unit: string
   current: number
-  status: Severity
+  status: string
   rate_per_hour: number
   eta_hours: number | null
   forecast_end: number | null
