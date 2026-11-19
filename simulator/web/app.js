@@ -1,0 +1,231 @@
+// 시뮬레이터 화면: 버튼·카드·로그 + 파이썬(simulator_3d.py) 연결.
+//
+// 파이썬 → 화면: window.sim.onData / onLog / onScenario 를 evaluate_js로 호출
+// 화면 → 파이썬: pywebview.api.toggle() / set_scenario(key)
+// pywebview 없이 브라우저로 열면 '미리보기 모드'(서버 전송 없이 가짜 값만 표시)로 동작한다.
+import { createScene } from './scene.js'
+
+const $ = (id) => document.getElementById(id)
+
+const CARD_KEYS = ['temperature', 'humidity', 'gas', 'air_quality', 'pressure']
+const CARD_COLORS = ['#60a5fa', '#f472b6', '#a78bfa', '#2dd4bf', '#facc15']
+const LOG_LIMIT = 300
+
+// 미리보기 모드에서 쓰는 설정 (실제 값은 파이썬 get_config()가 simulator.py에서 가져와 준다)
+const PREVIEW_CONFIG = {
+  deviceId: 'esp32-B1',
+  apiUrl: '(미리보기: 전송 안 함)',
+  interval: 3,
+  scenarios: [
+    { key: 'normal', label: '정상' },
+    { key: 'temperature', label: '온도 위험' },
+    { key: 'humidity', label: '습도 위험' },
+    { key: 'gas', label: '가스 위험' },
+    { key: 'air_quality', label: '공기질 위험' },
+    { key: 'pressure', label: '차압 위험' },
+  ],
+  sensors: {
+    temperature: { label: '온도', unit: '°C' },
+    humidity: { label: '습도', unit: '%' },
+    gas: { label: '가스', unit: '' },
+    air_quality: { label: '공기질', unit: '' },
+  },
+}
+
+const ui = {
+  connected: false, // 파이썬(또는 미리보기) 연결 + 화면 구성 완료
+  running: false,
+  scenario: 'normal',
+  preview: false,
+  labels: {},
+}
+
+// ── 로그 ─────────────────────────────────────
+function addLog(msg, tag = 'data') {
+  const box = $('log')
+  const line = document.createElement('div')
+  line.className = tag
+  const ts = new Date().toLocaleTimeString('ko-KR', { hour12: false })
+  line.textContent = `[${ts}] ${msg}`
+  box.appendChild(line)
+  while (box.children.length > LOG_LIMIT) box.firstChild.remove()
+  box.scrollTop = box.scrollHeight
+}
+
+const scene3d = createScene($('scene'), $('viewport'), { onLog: addLog })
+
+// ── 화면 구성 ────────────────────────────────
+function buildUI(cfg) {
+  $('config').textContent = `device: ${cfg.deviceId}   api: ${cfg.apiUrl}   interval: ${cfg.interval}s`
+
+  const row = $('scenario-row')
+  row.innerHTML = ''
+  for (const s of cfg.scenarios) {
+    ui.labels[s.key] = s.label
+    const b = document.createElement('button')
+    b.type = 'button'
+    b.className = `scenario-btn${s.key === 'normal' ? ' normal' : ''}`
+    b.dataset.scenario = s.key
+    b.textContent = s.label
+    b.addEventListener('click', () => onScenarioClick(s.key))
+    row.appendChild(b)
+  }
+
+  // 차압은 실내·실외 기압에서 계산한 값이라 SENSORS 목록에 없어 따로 붙인다.
+  const labels = { ...cfg.sensors, pressure: { label: '차압', unit: 'Pa' } }
+  const cards = $('cards')
+  cards.innerHTML = ''
+  CARD_KEYS.forEach((key, i) => {
+    const card = document.createElement('div')
+    card.className = 'card'
+    card.dataset.sensor = key
+    card.innerHTML = `
+      <div class="card-label"></div>
+      <div class="card-value" id="val-${key}" style="color:${CARD_COLORS[i]}">-</div>
+      <div class="card-unit"></div>`
+    card.querySelector('.card-label').textContent = labels[key]?.label ?? key
+    card.querySelector('.card-unit').textContent = labels[key]?.unit ?? ''
+    cards.appendChild(card)
+  })
+
+  renderScenario(ui.scenario)
+}
+
+function renderScenario(key) {
+  ui.scenario = key
+  document.querySelectorAll('.scenario-btn').forEach((b) => {
+    b.classList.toggle('active', b.dataset.scenario === key)
+  })
+  document.querySelectorAll('.card').forEach((c) => {
+    c.classList.toggle('alert', c.dataset.sensor === key)
+  })
+  const badge = $('status-badge')
+  const danger = key !== 'normal'
+  badge.textContent = danger ? `⚠ ${ui.labels[key] ?? key}` : '정상 운전'
+  badge.classList.toggle('danger', danger)
+  scene3d.setScenario(key)
+}
+
+function renderRunning(running) {
+  ui.running = running
+  const btn = $('run-btn')
+  btn.textContent = running ? '⏹  정지' : '▶  실행'
+  btn.classList.toggle('running', running)
+}
+
+// ── 파이썬에서 부르는 함수 ───────────────────
+window.sim = {
+  onData({ values, ok, sent, failed }) {
+    for (const key of CARD_KEYS) {
+      const el = $(`val-${key}`)
+      if (el && values[key] !== undefined) el.textContent = String(values[key])
+    }
+    $('stats').textContent = `전송: ${sent}  실패: ${failed}`
+    const data = Object.fromEntries(Object.entries(values).filter(([k]) => k !== 'device_id'))
+    addLog(`${ok ? '✓' : '✗'} ${JSON.stringify(data)}`, ok ? 'ok' : 'fail')
+  },
+  onLog({ msg, tag }) {
+    addLog(msg, tag)
+  },
+  onScenario(key) {
+    renderScenario(key)
+  },
+  // 자가진단(--selftest)·디버그용
+  debug: {
+    ready: () => ui.connected && scene3d.isReady(),
+    info: () => ({
+      ...scene3d.info(),
+      connected: ui.connected,
+      uiScenario: ui.scenario,
+      running: ui.running,
+      preview: ui.preview,
+      badge: $('status-badge').textContent,
+      stats: $('stats').textContent,
+      cards: Object.fromEntries(CARD_KEYS.map((k) => [k, $(`val-${k}`)?.textContent])),
+      logLines: $('log').children.length,
+    }),
+  },
+}
+
+// ── 버튼 ─────────────────────────────────────
+let api = null
+
+async function onScenarioClick(key) {
+  renderScenario(key) // 화면은 바로 바꾸고, 파이썬도 같은 값으로 맞춘다.
+  await api?.set_scenario(key)
+}
+
+$('run-btn').addEventListener('click', async () => {
+  if (!api) return // 연결 전 클릭 무시
+  renderRunning(await api.toggle())
+})
+
+// ── 미리보기 모드 (pywebview 없이 브라우저로 열었을 때) ──
+function previewApi() {
+  let timer = null
+  let sent = 0
+  const base = { temperature: 22, humidity: 45, gas: 800, air_quality: 300, pressure: 15 }
+  const danger = { temperature: 26, humidity: 60, gas: 3500, air_quality: 3500, pressure: -10 }
+  const range = { temperature: 0.6, humidity: 2, gas: 200, air_quality: 150, pressure: 3 }
+  const tick = () => {
+    const values = {}
+    for (const k of CARD_KEYS) {
+      const b = ui.scenario === k ? danger[k] : base[k]
+      values[k] = Math.round((b + (Math.random() - 0.5) * range[k]) * 10) / 10
+    }
+    window.sim.onData({ values, ok: true, sent: ++sent, failed: 0 })
+  }
+  return {
+    get_config: async () => PREVIEW_CONFIG,
+    set_scenario: async (key) => {
+      window.sim.onLog({ msg: `시나리오 전환 → ${ui.labels[key] ?? key}`, tag: 'info' })
+      window.sim.onScenario(key)
+    },
+    toggle: async () => {
+      if (timer) {
+        clearInterval(timer); timer = null
+        window.sim.onLog({ msg: '정지.', tag: 'info' })
+        return false
+      }
+      sent = 0
+      window.sim.onLog({ msg: '시작! (미리보기 — 서버로 전송하지 않음)', tag: 'ok' })
+      tick()
+      timer = setInterval(tick, PREVIEW_CONFIG.interval * 1000)
+      return true
+    },
+  }
+}
+
+function waitForPywebview(timeoutMs = 1500) {
+  return new Promise((resolve) => {
+    if (window.pywebview?.api?.get_config) return resolve(window.pywebview.api)
+    const timer = setTimeout(() => resolve(null), timeoutMs)
+    window.addEventListener('pywebviewready', () => {
+      clearTimeout(timer)
+      resolve(window.pywebview.api)
+    }, { once: true })
+  })
+}
+
+async function init() {
+  api = await waitForPywebview()
+  if (!api) {
+    ui.preview = true
+    api = previewApi()
+  }
+  const cfg = await api.get_config()
+  buildUI(cfg)
+  ui.connected = true
+  addLog(ui.preview
+    ? '미리보기 모드입니다 (pywebview 없이 열림). 서버로 전송하지 않습니다.'
+    : '준비 완료. ▶ 실행 버튼을 눌러 시작하세요.', 'info')
+
+  try {
+    const info = await scene3d.ready
+    $('model-hint').textContent = info.source === 'glb'
+      ? `모델: ${info.file}`
+      : '임시 모형 · web/models/model.glb 를 넣으면 교체됩니다'
+  } catch { /* scene.js가 로그로 알림 */ }
+}
+
+init()

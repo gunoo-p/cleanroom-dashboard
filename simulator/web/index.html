@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>클린룸 센서 시뮬레이터 3D</title>
+  <link rel="stylesheet" href="style.css" />
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "./vendor/three/build/three.module.js",
+        "three/addons/": "./vendor/three/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <h1>🏭 클린룸 센서 시뮬레이터 <span class="tag">3D</span></h1>
+      <button id="run-btn" class="run-btn" type="button">▶&nbsp; 실행</button>
+    </header>
+    <div class="config" id="config">불러오는 중…</div>
+
+    <section class="scenarios">
+      <div class="section-label">시나리오</div>
+      <div class="scenario-row" id="scenario-row"></div>
+    </section>
+
+    <section class="cards" id="cards"></section>
+
+    <main class="main">
+      <div class="viewport" id="viewport">
+        <canvas id="scene"></canvas>
+        <div class="overlay">
+          <div class="status-badge" id="status-badge">정상 운전</div>
+          <div class="model-hint" id="model-hint"></div>
+        </div>
+        <div class="viewport-help">드래그: 회전 · 휠: 확대/축소 · 우클릭 드래그: 이동</div>
+      </div>
+
+      <aside class="log-panel">
+        <div class="log-head">
+          <span class="section-label">전송 로그</span>
+          <span class="stats" id="stats">전송: 0 &nbsp;실패: 0</span>
+        </div>
+        <div class="log" id="log"></div>
+      </aside>
+    </main>
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

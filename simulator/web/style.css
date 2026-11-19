@@ -1,0 +1,222 @@
+/* 색은 기존 tkinter 시뮬레이터(simulator.py)와 같은 팔레트를 쓴다. */
+:root {
+  --bg: #0d1117;
+  --bg-deep: #0a0f1a;
+  --card: #161b27;
+  --line: #1e2d40;
+  --text: #e2e8f0;
+  --muted: #64748b;
+  --log-text: #94a3b8;
+  --ok: #4ade80;
+  --ok-bg: #14532d;
+  --danger: #f87171;
+  --danger-strong: #ef4444;
+  --danger-bg: #7f1d1d;
+  --stop-bg: #450a0a;
+  --info: #60a5fa;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Malgun Gothic", "Apple SD Gothic Neo", system-ui, sans-serif;
+  overflow: hidden;
+}
+
+.app {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 헤더 */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px 8px;
+}
+.header h1 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+}
+.tag {
+  margin-left: 6px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--line);
+  color: var(--info);
+  font-size: 11px;
+  vertical-align: middle;
+}
+.run-btn {
+  border: 0;
+  border-radius: 4px;
+  padding: 8px 18px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  background: var(--ok-bg);
+  color: var(--ok);
+}
+.run-btn.running {
+  background: var(--stop-bg);
+  color: var(--danger-strong);
+}
+
+.config {
+  padding: 5px 16px;
+  border-top: 1px solid var(--line);
+  background: var(--bg-deep);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.section-label {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* 시나리오 버튼 */
+.scenarios { padding: 10px 16px 0; }
+.scenario-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+.scenario-btn {
+  border: 0;
+  border-radius: 4px;
+  padding: 7px 12px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  background: var(--card);
+  color: var(--danger);
+}
+.scenario-btn.normal { color: var(--ok); }
+.scenario-btn.active { background: var(--danger-bg); }
+.scenario-btn.normal.active { background: var(--ok-bg); }
+
+/* 센서 카드 */
+.cards {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+  padding: 10px 16px;
+}
+.card {
+  padding: 8px 12px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  transition: border-color 0.3s;
+}
+.card.alert { border-color: var(--danger-strong); }
+.card-label { color: var(--muted); font-size: 12px; }
+.card-value {
+  font-size: 24px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.3;
+}
+.card-unit { color: var(--muted); font-size: 11px; }
+
+/* 3D + 로그 */
+.main {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 10px;
+  padding: 0 16px 14px;
+}
+
+.viewport {
+  position: relative;
+  min-height: 0;
+  background: var(--bg-deep);
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+#scene {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.overlay {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  pointer-events: none;
+}
+.status-badge {
+  padding: 5px 10px;
+  border-radius: 4px;
+  background: rgba(20, 83, 45, 0.85);
+  color: var(--ok);
+  font-size: 13px;
+  font-weight: 700;
+}
+.status-badge.danger {
+  background: rgba(127, 29, 29, 0.9);
+  color: #fecaca;
+  animation: blink 1s steps(2, start) infinite;
+}
+@keyframes blink { to { opacity: 0.55; } }
+.model-hint {
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: rgba(10, 15, 26, 0.8);
+  color: var(--muted);
+  font-size: 11px;
+}
+.model-hint:empty { display: none; }
+.viewport-help {
+  position: absolute;
+  right: 10px;
+  bottom: 8px;
+  color: var(--muted);
+  font-size: 11px;
+  pointer-events: none;
+}
+
+.log-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.log-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding-bottom: 4px;
+}
+.stats { color: var(--muted); font-size: 12px; }
+.log {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px;
+  background: var(--bg-deep);
+  color: var(--log-text);
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 11.5px;
+  line-height: 1.5;
+  word-break: break-all;
+}
+.log .ok { color: var(--ok); }
+.log .fail { color: var(--danger-strong); }
+.log .info { color: var(--info); }
