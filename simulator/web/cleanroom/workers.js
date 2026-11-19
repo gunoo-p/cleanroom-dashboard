@@ -5,10 +5,19 @@
 import * as THREE from 'three'
 import { COLOR, MAT, rbox, cyl } from './parts.js'
 
-const SUIT = new THREE.MeshStandardMaterial({ color: COLOR.suit, roughness: 0.85 })
-const GLOVE = new THREE.MeshStandardMaterial({ color: COLOR.glove, roughness: 0.6 })
-const GOGGLE = new THREE.MeshStandardMaterial({ color: 0x1d3a4f, roughness: 0.15, metalness: 0.4 })
+// 둥글둥글한 캐릭터용 재질 (살짝 크림빛 흰색 + 부드러운 광택)
+const SUIT = new THREE.MeshStandardMaterial({ color: 0xfbfcfd, roughness: 0.62 })
+const SUIT_SHADE = new THREE.MeshStandardMaterial({ color: 0xe9eef4, roughness: 0.7 })
+const GLOVE = new THREE.MeshStandardMaterial({ color: COLOR.glove, roughness: 0.5 })
+const VISOR = new THREE.MeshStandardMaterial({ color: 0x24506a, roughness: 0.08, metalness: 0.35 })
+const EYE_WHITE = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.3, emissive: 0xffffff, emissiveIntensity: 0.25 })
+const PUPIL = new THREE.MeshStandardMaterial({ color: 0x1b2430, roughness: 0.3 })
+const SHINE = new THREE.MeshBasicMaterial({ color: 0xffffff })
+const BLUSH = new THREE.MeshBasicMaterial({ color: 0xffa8b8, transparent: true, opacity: 0.75 })
 const SEAM = new THREE.MeshStandardMaterial({ color: 0xd6dee6, roughness: 0.8 })
+// 사람마다 다른 가슴 배지 색
+const BADGES = [0x2fb3b5, 0xff8a65, 0xffc947, 0x9b7bff, 0x4f9dff, 0x5cc977, 0xff7fb0]
+const WORKER_SCALE = 1.15
 
 const WALK_SPEED = 1.5
 const HUB = new THREE.Vector2(5.0, -1.6) // 대피 경로가 모이는 지점 (장비 없는 통로)
@@ -23,59 +32,116 @@ function capsule(name, r, len, mat) {
   return m
 }
 
-// 발 위치(y=0)가 원점, 정면이 +z인 작업자 인형
-function buildWorker(name) {
+function sphere(name, r, mat, x = 0, y = 0, z = 0, sx = 1, sy = 1, sz = 1) {
+  const m = new THREE.Mesh(new THREE.SphereGeometry(r, 24, 18), mat)
+  m.name = name
+  m.position.set(x, y, z)
+  m.scale.set(sx, sy, sz)
+  return m
+}
+
+// 서양배 모양 몸통 (아래가 통통하고 위로 갈수록 좁아짐)
+const BODY_GEO = new THREE.LatheGeometry([
+  [0.0, 0.0], [0.2, 0.01], [0.29, 0.07], [0.315, 0.18], [0.3, 0.3],
+  [0.26, 0.42], [0.2, 0.5], [0.1, 0.55], [0.0, 0.56],
+].map(([r, y]) => new THREE.Vector2(r, y)), 32)
+
+// 발 위치(y=0)가 원점, 정면이 +z인 2.5등신 캐릭터
+//   root ─ legs(엉덩이 축) / body(통통 튀는 상체) ─ arms(어깨 축) / head(끄덕이는 머리) ─ eyes
+function buildWorker(name, badgeColor = BADGES[0]) {
   const root = new THREE.Group()
   root.name = name
-  const body = new THREE.Group() // 걸을 때 위아래로 흔들리는 상체
+  const body = new THREE.Group() // 걸을 때 눌렸다 늘어나며 튀는 상체
   root.add(body)
 
+  // 짧고 뭉툭한 다리 + 동그란 신발
   const legs = []
   for (const side of [-1, 1]) {
     const hip = new THREE.Group()
-    hip.position.set(0.11 * side, 0.9, 0)
-    const leg = capsule(`${name}_leg`, 0.085, 0.62, SUIT)
-    leg.position.y = -0.42
+    hip.position.set(0.12 * side, 0.34, 0)
+    const leg = capsule(`${name}_leg`, 0.09, 0.12, SUIT)
+    leg.position.y = -0.13
     hip.add(leg)
-    hip.add(rbox(`${name}_boot`, 0.16, 0.13, 0.28, SUIT, 0, -0.84, 0.04, 0.05))
+    hip.add(sphere(`${name}_boot`, 0.1, SUIT_SHADE, 0, -0.27, 0.04, 1.05, 0.72, 1.35))
     root.add(hip)
     legs.push(hip)
   }
 
-  const torso = capsule(`${name}_torso`, 0.2, 0.42, SUIT)
-  torso.position.y = 1.2
-  torso.scale.z = 0.78
+  // 몸통 + 지퍼 + 배지
+  const torso = new THREE.Mesh(BODY_GEO, SUIT)
+  torso.name = `${name}_torso`
+  torso.position.y = 0.26
+  torso.scale.z = 0.88
   body.add(torso)
-  body.add(rbox(`${name}_zip`, 0.02, 0.5, 0.01, SEAM, 0, 1.2, 0.158, 0.005))
-  body.add(rbox(`${name}_belt`, 0.4, 0.04, 0.32, SEAM, 0, 0.98, 0, 0.02))
+  body.add(rbox(`${name}_zip`, 0.016, 0.3, 0.01, SEAM, 0, 0.5, 0.27, 0.005))
+  const badgeMat = new THREE.MeshStandardMaterial({ color: badgeColor, roughness: 0.4 })
+  const badge = cyl(`${name}_badge`, 0.05, 0.05, 0.015, badgeMat, 0.12, 0.58, 0.23, 20)
+  badge.rotation.x = Math.PI / 2 - 0.35
+  body.add(badge)
+  // 등 배지 (뒤에서 봐도 누군지 구분되게)
+  const back = cyl(`${name}_back_badge`, 0.085, 0.085, 0.015, badgeMat, 0, 0.42, -0.27, 24)
+  back.rotation.x = Math.PI / 2 + 0.2
+  body.add(back)
 
+  // 짧은 팔 + 동그란 장갑 (어깨 축으로 회전)
   const arms = []
   for (const side of [-1, 1]) {
     const shoulder = new THREE.Group()
-    shoulder.position.set(0.27 * side, 1.42, 0)
-    const arm = capsule(`${name}_arm`, 0.065, 0.46, SUIT)
-    arm.position.y = -0.27
+    shoulder.position.set(0.24 * side, 0.68, 0)
+    const arm = capsule(`${name}_arm`, 0.075, 0.16, SUIT)
+    arm.position.y = -0.13
     shoulder.add(arm)
-    const glove = new THREE.Mesh(new THREE.SphereGeometry(0.07, 12, 10), GLOVE)
-    glove.name = `${name}_glove`
-    glove.position.y = -0.56
-    shoulder.add(glove)
-    shoulder.rotation.z = 0.08 * side
+    shoulder.add(sphere(`${name}_glove`, 0.085, GLOVE, 0, -0.28, 0))
+    shoulder.rotation.z = 0.28 * side // 몸에서 살짝 벌어진 팔
     body.add(shoulder)
     arms.push(shoulder)
   }
 
-  // 후드 + 고글 + 마스크
-  const hood = new THREE.Mesh(new THREE.SphereGeometry(0.155, 20, 16), SUIT)
-  hood.name = `${name}_hood`
-  hood.position.y = 1.7
-  hood.scale.set(1, 1.12, 1.02)
-  body.add(hood)
-  body.add(cyl(`${name}_neck`, 0.1, 0.13, 0.12, SUIT, 0, 1.55, 0, 16))
-  body.add(rbox(`${name}_goggle`, 0.2, 0.07, 0.07, GOGGLE, 0, 1.72, 0.125, 0.03))
-  body.add(rbox(`${name}_mask`, 0.15, 0.08, 0.05, SEAM, 0, 1.63, 0.135, 0.03))
+  // 큰 머리(후드) — 머리만 따로 끄덕이거나 두리번거릴 수 있게 그룹으로
+  const head = new THREE.Group()
+  head.position.y = 0.98
+  body.add(head)
+  head.add(sphere(`${name}_hood`, 0.31, SUIT, 0, 0, 0, 1.0, 0.94, 0.98))
+  // 머리띠: 한쪽 귀에서 정수리를 지나 반대쪽 귀까지 배지색 띠 (뒷모습이 밋밋하지 않게, 얼굴은 안 가림)
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(0.305, 0.02, 8, 40, Math.PI), badgeMat)
+  rim.name = `${name}_hood_rim`
+  rim.position.z = -0.04
+  rim.scale.set(1.0, 0.94, 1.0)
+  head.add(rim)
+  // 고글(얼굴 앞 둥근 창): 구의 앞쪽 일부만 잘라 쓴다
+  const visor = new THREE.Mesh(
+    new THREE.SphereGeometry(0.312, 32, 16, Math.PI * 0.5 - 0.62, 1.24, Math.PI * 0.5 - 0.42, 0.62),
+    VISOR,
+  )
+  visor.name = `${name}_visor`
+  visor.scale.set(1.0, 0.94, 0.98)
+  head.add(visor)
+  // 동그란 눈 (흰자 + 눈동자 + 반짝임) — 깜빡일 때 eyes 그룹을 납작하게
+  const eyes = new THREE.Group()
+  eyes.position.set(0, 0.04, 0.3) // 고글 표면보다 살짝 앞에
+  for (const side of [-1, 1]) {
+    const eye = new THREE.Group()
+    eye.position.set(0.095 * side, 0, 0)
+    eye.add(sphere(`${name}_eye`, 0.055, EYE_WHITE, 0, 0, 0, 1, 1.15, 0.5))
+    eye.add(sphere(`${name}_pupil`, 0.032, PUPIL, 0, -0.004, 0.022, 1, 1.15, 0.5))
+    eye.add(sphere(`${name}_shine`, 0.011, SHINE, 0.012, 0.018, 0.04))
+    eye.rotation.y = 0.32 * side // 둥근 얼굴을 따라 바깥으로 살짝 돌림
+    eyes.add(eye)
+  }
+  head.add(eyes)
+  // 마스크 + 볼 터치
+  head.add(sphere(`${name}_mask`, 0.12, SUIT_SHADE, 0, -0.13, 0.22, 1.25, 0.62, 0.7))
+  for (const side of [-1, 1]) {
+    const blush = new THREE.Mesh(new THREE.CircleGeometry(0.035, 16), BLUSH)
+    blush.name = `${name}_blush`
+    blush.position.set(0.17 * side, -0.07, 0.262)
+    blush.rotation.y = 0.6 * side
+    blush.userData.noShadow = true
+    head.add(blush)
+  }
 
-  return { root, body, legs, arms }
+  root.scale.setScalar(WORKER_SCALE)
+  return { root, body, legs, arms, head, eyes, blinkAt: 1 + Math.random() * 3 }
 }
 
 function heading(dx, dz) { return Math.atan2(dx, dz) }
@@ -91,8 +157,9 @@ const STATIONS = [
   { name: 'worker_bench',  x: -2.85, z: -3.85, face: Math.PI,  out: [] },             // 케미컬 벤치
   { name: 'worker_kiosk',  x: 3.4,   z: -2.45, face: 2.8,      out: [] },             // 노광장비 단말기
   { name: 'worker_tool',   x: -4.15, z: 0.75,  face: -Math.PI / 2, out: [[-2.6, -0.6]] }, // 공정장비 2
-  { name: 'worker_insp1',  x: -1.2,  z: -0.2,  face: 0,        out: [] },             // 검사대 1(뒤에 서서 앞을 봄)
-  { name: 'worker_insp2',  x: 1.85,  z: 1.95,  face: -0.15,    out: [] },             // 검사대 2
+  // 검사대 작업자는 옆에 서서 현미경을 봄 (뒤에 서면 키가 작아 책상에 가려짐)
+  { name: 'worker_insp1',  x: -0.2,  z: 0.75,  face: -Math.PI / 2, out: [] },          // 검사대 1 오른쪽
+  { name: 'worker_insp2',  x: 0.68,  z: 2.85,  face: Math.PI / 2 - 0.15, out: [[0.6, 1.6]] }, // 검사대 2 왼쪽
   { name: 'worker_cart',   x: 5.85,  z: 1.8,   face: -1.92,    out: [[6.2, 0.6]] },   // FOUP 카트
 ]
 // 순회하는 작업자 경로 (장비를 피하는 루프)
@@ -105,7 +172,7 @@ export function buildWorkers() {
   const people = []
 
   STATIONS.forEach((s, i) => {
-    const w = buildWorker(s.name)
+    const w = buildWorker(s.name, BADGES[i])
     w.root.position.set(s.x, 0, s.z)
     w.root.rotation.y = s.face
     root.add(w.root)
@@ -113,12 +180,12 @@ export function buildWorkers() {
   })
 
   // 순회 작업자 + 웨이퍼 트레이
-  const walker = buildWorker('worker_walker')
+  const walker = buildWorker('worker_walker', BADGES[6])
   const tray = new THREE.Group()
   tray.name = 'worker_walker_tray'
-  tray.position.set(0, 1.12, 0.38)
-  tray.add(rbox('worker_walker_tray_box', 0.42, 0.05, 0.36, new THREE.MeshStandardMaterial({ color: 0x3aa9ad, roughness: 0.35 }), 0, 0, 0, 0.02))
-  tray.add(cyl('worker_walker_tray_wafer', 0.14, 0.14, 0.012, new THREE.MeshStandardMaterial({ color: 0x5fd0dc, metalness: 0.7, roughness: 0.2 }), 0, 0.032, 0, 32))
+  tray.position.set(0, 0.56, 0.4) // 앞으로 내민 두 손 위
+  tray.add(rbox('worker_walker_tray_box', 0.4, 0.045, 0.32, new THREE.MeshStandardMaterial({ color: 0x3aa9ad, roughness: 0.35 }), 0, 0, 0, 0.02))
+  tray.add(cyl('worker_walker_tray_wafer', 0.13, 0.13, 0.012, new THREE.MeshStandardMaterial({ color: 0x5fd0dc, metalness: 0.7, roughness: 0.2 }), 0, 0.03, 0, 32))
   walker.body.add(tray)
   walker.root.position.set(LOOP[0][0], 0, LOOP[0][1])
   root.add(walker.root)
@@ -178,38 +245,63 @@ export function buildWorkers() {
     return false
   }
 
+  // 통통 튀는 걸음: 발 디딜 때 몸이 살짝 눌리고(squash) 떠오를 때 늘어남(stretch)
   function poseWalk(p, dt, carrying) {
-    p.walkT += dt * 7
+    p.walkT += dt * 9
     const s = Math.sin(p.walkT)
-    p.legs[0].rotation.x = s * 0.5
-    p.legs[1].rotation.x = -s * 0.5
+    const bounce = Math.abs(Math.cos(p.walkT))
+    p.legs[0].rotation.x = s * 0.7
+    p.legs[1].rotation.x = -s * 0.7
     if (carrying) {
-      p.arms[0].rotation.x = p.arms[1].rotation.x = -0.95
+      p.arms[0].rotation.x = p.arms[1].rotation.x = -1.25 + bounce * 0.05
     } else {
-      p.arms[0].rotation.x = -s * 0.45
-      p.arms[1].rotation.x = s * 0.45
+      p.arms[0].rotation.x = -s * 0.75
+      p.arms[1].rotation.x = s * 0.75
     }
-    p.body.position.y = Math.abs(Math.cos(p.walkT)) * 0.03
+    p.body.position.y = bounce * 0.07
+    const squash = Math.cos(p.walkT * 2) * 0.045
+    p.body.scale.set(1 + squash * 0.5, 1 - squash, 1 + squash * 0.5)
+    p.body.rotation.x = 0.05
+    p.body.rotation.z = 0
+    p.head.rotation.set(0, 0, s * 0.09) // 걸음에 맞춰 고개가 좌우로 갸웃
   }
 
   function poseStill(p, t, kind) {
     p.legs[0].rotation.x = p.legs[1].rotation.x = 0
-    p.body.position.y = 0
+    const breathe = Math.sin(t * 2 + p.phase) * 0.012
+    p.body.scale.set(1 - breathe * 0.5, 1 + breathe, 1 - breathe * 0.5) // 숨쉬기
     if (kind === 'work') {
-      // 장비를 만지는 손동작
-      p.arms[0].rotation.x = -0.95 + Math.sin(t * 2.2 + p.phase) * 0.15
-      p.arms[1].rotation.x = -0.8 + Math.sin(t * 2.7 + p.phase + 1) * 0.18
-      p.body.rotation.x = 0.06
+      // 장비를 만지는 손동작 + 화면을 보며 고개 끄덕끄덕
+      p.arms[0].rotation.x = -1.3 + Math.sin(t * 3 + p.phase) * 0.2
+      p.arms[1].rotation.x = -1.15 + Math.sin(t * 3.4 + p.phase + 1.5) * 0.22
+      p.body.position.y = Math.max(0, Math.sin(t * 3 + p.phase)) * 0.015
+      p.body.rotation.set(0.08, 0, 0)
+      p.head.rotation.set(0.12 + Math.sin(t * 2.2 + p.phase) * 0.08, Math.sin(t * 0.6 + p.phase) * 0.15, 0)
     } else {
-      // 대기: 팔 내리고 살짝 흔들림
-      p.arms[0].rotation.x = Math.sin(t * 1.3 + p.phase) * 0.05
-      p.arms[1].rotation.x = -Math.sin(t * 1.3 + p.phase) * 0.05
-      p.body.rotation.x = 0
+      // 대기: 팔 내리고 몸을 좌우로 살랑, 두리번두리번
+      p.arms[0].rotation.x = Math.sin(t * 1.6 + p.phase) * 0.08
+      p.arms[1].rotation.x = -Math.sin(t * 1.6 + p.phase) * 0.08
+      p.body.position.y = 0
+      p.body.rotation.set(0, 0, Math.sin(t * 1.4 + p.phase) * 0.05)
+      p.head.rotation.set(-0.05, Math.sin(t * 0.8 + p.phase) * 0.55, 0)
+    }
+  }
+
+  // 2~5초마다 눈 깜빡임
+  function blink(p, dt) {
+    p.blinkAt -= dt
+    if (p.blinkAt < 0) {
+      p.eyes.scale.y = 0.12
+      if (p.blinkAt < -0.12) {
+        p.eyes.scale.y = 1
+        p.blinkAt = 2 + Math.random() * 3
+      }
     }
   }
 
   function update(dt, t) {
     for (const p of people) {
+      blink(p, dt)
       if (p.mode === 'work') {
         poseStill(p, t, 'work')
       } else if (p.mode === 'loop') {
