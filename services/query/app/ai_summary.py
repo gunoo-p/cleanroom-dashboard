@@ -1,14 +1,10 @@
-from typing import Optional
-from anthropic import AsyncAnthropic
+import os
+import httpx
 
-_client: Optional[AsyncAnthropic] = None
-
-
-def _get_client() -> AsyncAnthropic:
-    global _client
-    if _client is None:
-        _client = AsyncAnthropic()
-    return _client
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+# 3.8-flash는 과부하(503)가 잦아 짧은 요약에 충분한 lite 모델을 쓴다.
+GEMINI_MODEL = "gemini-3.5-flash-lite"
+GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
 
 
 async def generate_day_summary(
@@ -32,12 +28,20 @@ async def generate_day_summary(
         "제목이나 마크다운 서식(#, *, - 등) 없이 순수한 문장 2~3개로만 답하세요."
     )
 
-    response = await _get_client().messages.create(
-        model="claude-haiku-4-5",
-        max_tokens=300,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    for block in response.content:
-        if block.type == "text":
-            return block.text.strip()
-    return ""
+    if not GEMINI_API_KEY:
+        raise RuntimeError("GEMINI_API_KEY가 설정되지 않음")
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.post(
+            GEMINI_URL,
+            headers={"x-goog-api-key": GEMINI_API_KEY},
+            json={
+                "contents": [{"parts": [{"text": prompt}]}],
+                # thinking 토큰도 출력 한도에서 깎이므로 최소로 둬야 300토큰 안에 답이 잘리지 않는다.
+                # 3.x 모델은 thinkingBudget을 400으로 거부하고 thinkingLevel만 받는다.
+                "generationConfig": {"maxOutputTokens": 300, "thinkingConfig": {"thinkingLevel": "minimal"}},
+            },
+        )
+        response.raise_for_status()
+    parts = response.json().get("candidates", [{}])[0].get("content", {}).get("parts", [])
+    return "".join(p.get("text", "") for p in parts).strip()

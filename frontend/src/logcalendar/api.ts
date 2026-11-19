@@ -32,7 +32,7 @@ export function fetchMonthHistory(deviceId: string, year: number, month: number)
 }
 
 // 날짜를 클릭해 상세 로그를 볼 때는 그 하루만 1분 간격으로 더 촘촘하게 받는다.
-// 실제 센서는 3초마다 값을 보내므로(simulator.py INTERVAL=3), 5분 평균은 짧게 스쳐가는
+// 실제 센서는 3초마다 값을 보내므로(ESP32 펌웨어 INTERVAL=3000), 5분 평균은 짧게 스쳐가는
 // 위험/경고를 뭉개버릴 수 있다 — 1분(하루 1440포인트×5센서=7200줄)이 무겁지 않으면서도
 // 대시보드 탭의 "1일" 해상도와 맞는 절충점.
 export function fetchDayHistory(deviceId: string, year: number, month: number, day: number): Promise<HistoryRow[]> {

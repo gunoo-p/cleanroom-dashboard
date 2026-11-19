@@ -8,7 +8,9 @@ export function AppShell() {
   const [isDark, setIsDark] = useState(
     window.matchMedia('(prefers-color-scheme: dark)').matches
   )
-  const [sidebarOpen, setSidebarOpen] = useState(true)
+  // 모바일(index.css의 640px 기준)에선 사이드바가 본문을 덮는 오버레이라 닫힌 채로 시작하고, 탭을 고르면 닫는다.
+  const isMobile = () => window.matchMedia('(max-width: 640px)').matches
+  const [sidebarOpen, setSidebarOpen] = useState(() => !isMobile())
   const [activeTabId, setActiveTabId] = useState(TABS[0].id)
   const [zone, setZone] = useState<Zone>('A')
 
@@ -32,7 +34,10 @@ export function AppShell() {
       <Sidebar
         tabs={TABS}
         activeId={activeTabId}
-        onSelect={setActiveTabId}
+        onSelect={id => {
+          setActiveTabId(id)
+          if (isMobile()) setSidebarOpen(false)
+        }}
         isOpen={sidebarOpen}
         onToggle={() => setSidebarOpen(p => !p)}
         isDark={isDark}

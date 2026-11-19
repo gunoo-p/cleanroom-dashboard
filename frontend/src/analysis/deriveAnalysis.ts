@@ -2,6 +2,7 @@
 import type { AnalysisData, Severity, SensorKey } from './types'
 import { THRESHOLDS, TREND } from './config'
 import { movingAverage, linearRegression, pearsonCorrelation, etaToThreshold } from './calc'
+import { statusFor } from '../dashboard/deriveDashboard'
 
 // ── 설비 이상 예측 (행 1) ───────────────────────────────────────────
 export interface TrendPanelPoint { t: string; raw: number; ma: number }
@@ -63,10 +64,9 @@ function buildEquipmentAnomaly(data: AnalysisData): EquipmentAnomalyView {
     TREND.risingSlopePerHour.gas,
   )
 
-  const status: Severity =
-    temp.latestValue >= THRESHOLDS.temp.danger || gas.latestValue >= THRESHOLDS.gas.danger ? 'danger' :
-    temp.latestValue >= THRESHOLDS.temp.warning || gas.latestValue >= THRESHOLDS.gas.warning || temp.isRising || gas.isRising ? 'warning' :
-    'normal'
+  const currentStatuses = [statusFor('temp', temp.latestValue), statusFor('gas', gas.latestValue)]
+  const status: Severity = currentStatuses.includes('danger') ? 'danger' :
+    currentStatuses.includes('warning') || temp.isRising || gas.isRising ? 'warning' : 'normal'
 
   return { temp, gas, status }
 }

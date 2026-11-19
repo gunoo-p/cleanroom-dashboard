@@ -15,7 +15,7 @@ const LOW_IS_BAD: Partial<Record<SensorKey, true>> = { pressure: true }
 
 // 온도/습도: 반도체 클린룸 실측 기준(중심값 ± 이탈폭, airinnovations.com 참고)으로 4단계 판정.
 // 정상: 22.0±0.5℃/45%±2%RH, 주의: ±1℃/±5%RH, 경고: ±2℃/±10%RH, 중단(웨이퍼 파손·ESD 위험): 그 이상.
-const DEVIATION_THRESHOLDS: Partial<Record<SensorKey, { center: number; caution: number; warning: number; danger: number }>> = {
+export const DEVIATION_THRESHOLDS: Partial<Record<SensorKey, { center: number; caution: number; warning: number; danger: number }>> = {
   temp: { center: 22.0, caution: 0.5, warning: 1.0, danger: 2.0 },
   hum: { center: 45, caution: 2, warning: 5, danger: 10 },
 }
@@ -24,7 +24,7 @@ const DEVIATION_THRESHOLDS: Partial<Record<SensorKey, { center: number; caution:
 // 실측 캘리브레이션 끝나면 조정 필요.
 // pressure는 실내-실외 차압(Pa). ISO 14644 기준 클린룸 양압 권장치(ISO 7: +10~20Pa, ISO 8: +5~15Pa)를
 // 참고해 10Pa 이상을 정상, 5~10Pa를 경고, 5Pa 미만(0 이하 포함, 양압 붕괴)을 위험으로 잡음.
-const DIRECT_THRESHOLDS: Partial<Record<SensorKey, { warning: number; danger: number }>> = {
+export const DIRECT_THRESHOLDS: Partial<Record<SensorKey, { warning: number; danger: number }>> = {
   gas: { warning: 2000, danger: 3000 },
   pm: { warning: 2000, danger: 3000 },
   pressure: { warning: 10, danger: 5 },

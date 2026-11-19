@@ -38,11 +38,13 @@ function pad(n: number) {
 }
 
 // 월간 히스토리(여러 날짜가 섞인 시계열)를 날짜별로 묶어서 각 날의 위험/경고 개수를 센다.
-export function computeMonthDayCounts(rows: HistoryRow[]): Record<number, { danger: number; warning: number }> {
-  const byDay: Record<number, { danger: number; warning: number }> = {}
+// total은 그날 측정 건수 — 정상만 있던 날과 측정 자체가 없던 날을 구분하는 데 쓴다.
+export function computeMonthDayCounts(rows: HistoryRow[]): Record<number, { danger: number; warning: number; total: number }> {
+  const byDay: Record<number, { danger: number; warning: number; total: number }> = {}
   for (const p of cleanRows(rows)) {
     const day = new Date(p.t).getDate()
-    const bucket = byDay[day] ?? (byDay[day] = { danger: 0, warning: 0 })
+    const bucket = byDay[day] ?? (byDay[day] = { danger: 0, warning: 0, total: 0 })
+    bucket.total++
     for (const cfg of SENSOR_CONFIGS) {
       const s = toLogStatus(statusFor(cfg.key, p[cfg.key]))
       if (s === 'danger') bucket.danger++

@@ -5,20 +5,24 @@
 
 // ── 설정 ──────────────────────────
 const char* ssid        = "";  // WiFi 이름
-const char* password    = "";  // WiFi 비밀번호
+const char* password    = "";  // WiFi 비밀번호 
 const char* mqtt_server = "";  // 서버 IP
 const int   mqtt_port   = 1883;
 const char* topic       = "cleanroom/sensors";
 const char* device_id   = "esp32-A1";
 
 #define MQ2_PIN   34
-#define MQ135_PIN 33
-#define INTERVAL  1000  // 3초
+#define MQ135_PIN 35
+#define INTERVAL  1000  // 1초
 
 // 실외 BME280용 2번째 I2C 버스 핀. 두 센서 모두 SDO 핀이 없는 4핀 모듈이라 주소가 둘 다 0x76으로
 // 고정돼 있음 — 같은 버스에 물리면 주소가 겹쳐서 안 되니, 버스 자체를 분리해서 둘 다 0x76 그대로 쓴다.
 #define SDA2_PIN 25
 #define SCL2_PIN 26
+
+// 실외 BME280 개체 편차 보정(hPa). 두 센서를 같은 공간에 두고 (실내-실외) 평균을 낸 값 — 2026-11-16, 1486건 평균 -0.28.
+// 센서를 바꾸거나 다시 맞출 땐 같은 공간에 두고 오프셋 0으로 돌린 뒤 평균 차이를 다시 넣는다.
+#define PRESSURE_OUT_OFFSET -0.28F
 
 Adafruit_BME280 bmeIn;
 Adafruit_BME280 bmeOut;
@@ -72,7 +76,7 @@ void loop() {
   float temperature     = bmeIn.readTemperature();
   float humidity        = bmeIn.readHumidity();
   float pressure        = bmeIn.readPressure() / 100.0F;   // hPa, 실내
-  float pressureOutside = bmeOut.readPressure() / 100.0F;  // hPa, 실외(차압 계산용 기준값)
+  float pressureOutside = bmeOut.readPressure() / 100.0F + PRESSURE_OUT_OFFSET;  // hPa, 실외(차압 계산용 기준값)
   int   mq2_raw     = analogRead(MQ2_PIN);
   int   mq135_raw   = analogRead(MQ135_PIN);
 
