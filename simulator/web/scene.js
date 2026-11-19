@@ -31,10 +31,10 @@ const DEFAULT_CONFIG = {
 const PRESETS = {
   normal:      { particle: 'downflow', color: 0x4fbfc8, fogColor: 0x05070a, fog: 0.0,   glow: null,     beacon: false },
   temperature: { particle: 'rise',     color: 0xff6a1f, fogColor: 0xffd9c7, fog: 0.008, glow: 0xff3b1f, beacon: true },
-  humidity:    { particle: 'rain',     color: 0x3b82f6, fogColor: 0xcfe0ff, fog: 0.018, glow: 0x3b82f6, beacon: true },
-  gas:         { particle: 'leak',     color: 0x46b946, fogColor: 0xdff5cc, fog: 0.01,  glow: 0xc6e021, beacon: true },
-  air_quality: { particle: 'dust',     color: 0x8a7356, fogColor: 0xd9cdb8, fog: 0.02,  glow: 0xf59e0b, beacon: true },
-  pressure:    { particle: 'inflow',   color: 0x56677a, fogColor: 0xffe3e3, fog: 0.006, glow: 0xef4444, beacon: true },
+  humidity:    { particle: 'rain',     color: 0x3b82f6, fogColor: 0xcfe0ff, fog: 0.018, glow: 0x3b82f6, beacon: false },
+  gas:         { particle: 'leak',     color: 0x46b946, fogColor: 0xdff5cc, fog: 0.01,  glow: 0xc6e021, beacon: false },
+  air_quality: { particle: 'dust',     color: 0x8a7356, fogColor: 0xd9cdb8, fog: 0.02,  glow: 0xf59e0b, beacon: false },
+  pressure:    { particle: 'inflow',   color: 0x56677a, fogColor: 0xffe3e3, fog: 0.006, glow: 0xef4444, beacon: false },
 }
 
 const PARTICLE_COUNT = 700

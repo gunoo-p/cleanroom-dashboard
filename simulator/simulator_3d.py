@@ -221,7 +221,7 @@ def selftest(window, api, result):
                 and i["uiScenario"] == key
                 and i["scenario"] == key
                 and i["particles"] == EXPECTED_PARTICLES[key]
-                and i["beacon"] == (key != "normal")
+                and i["beacon"] == (key == "temperature")  # 경광등·사이렌은 온도 위험에서만
                 and (key == "normal" or i["glowMeshes"] > 0)
             )
             check(
@@ -258,6 +258,9 @@ def selftest(window, api, result):
             acts = w["acts"]
             check("온도: 부채질·걱정·다급한 작업으로 나뉨",
                   acts.get("fan", 0) >= 3 and acts.get("worried", 0) >= 1 and acts.get("work_fast") == 1, str(w))
+            i = info()
+            check("온도: 사이렌 회전·화면 테두리 경고 켜짐",
+                  i["model"]["effects"]["siren"] > 0.9 and i["vignette"], f"siren={i['model']['effects']['siren']} vignette={i['vignette']}")
 
             def fx():
                 return info()["model"]["effects"]

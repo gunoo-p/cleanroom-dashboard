@@ -7,6 +7,7 @@ import * as THREE from 'three'
 import { MAT, cyl } from './parts.js'
 import { ROOM } from './room.js'
 import { FFU_Y } from './equipment.js'
+import { fadeTexture } from './textures.js'
 
 const rnd = (a, b) => a + Math.random() * (b - a)
 const SPHERE = new THREE.SphereGeometry(1, 20, 14)
@@ -180,10 +181,118 @@ function buildGauge(name, { label, unit, min, max, zones, x, y, z, r = 0.28 }) {
   return { group: g, set, get: () => value }
 }
 
+// ── 온도 위험 사이렌 ───────────────────────────
+// 천장 가운데 회전 사이렌(붉은 빛줄기 2개가 바닥·벽을 쓸고 지나감) + 방 전체 붉은 점멸
+// + 공정장비 위·벽 모서리의 작은 회전 경광등.
+// 조명을 켜고 끄면 재질이 다시 컴파일되며 화면이 잠깐 멈추므로, 조명은 항상 두고 밝기만 0↔최대로 조절한다.
+const SIREN_RED = 0xff2a2a
+
+function buildSiren(fx) {
+  const g = new THREE.Group()
+  g.name = 'siren'
+  fx.add(g)
+
+  // 천장 회전 사이렌 (아래를 향한 반구 등)
+  const hub = new THREE.Group()
+  hub.position.set(0.2, 4.95, -0.3)
+  g.add(hub)
+  const mount = cyl('siren_mount', 0.34, 0.38, 0.12, MAT.greyDark, 0, 0.06, 0, 28)
+  hub.add(mount)
+  const domeMat = new THREE.MeshStandardMaterial({ color: 0x7f1d1d, emissive: SIREN_RED, emissiveIntensity: 0.2, roughness: 0.3 })
+  const dome = new THREE.Mesh(new THREE.SphereGeometry(0.3, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2), domeMat)
+  dome.name = 'siren_dome'
+  dome.rotation.x = Math.PI
+  hub.add(dome)
+
+  const spin = new THREE.Group()
+  hub.add(spin)
+  // 빛줄기는 사이렌 쪽이 진하고 끝으로 갈수록 옅어짐 (방 밖으로 삐져나와도 안 보이게)
+  const beamMat = new THREE.MeshBasicMaterial({
+    color: SIREN_RED, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide, alphaMap: fadeTexture(),
+  })
+  const L = 8
+  const beamGeo = new THREE.ConeGeometry(L * Math.tan(0.26), L, 28, 1, true)
+  beamGeo.translate(0, -L / 2, 0) // 꼭짓점이 사이렌 위치, 바닥 쪽으로 넓어짐
+  const lights = []
+  for (const side of [0, Math.PI]) {
+    const arm = new THREE.Group()
+    arm.rotation.y = side
+    const tilt = new THREE.Group()
+    tilt.rotation.x = 0.95 // 수직에서 약 55° 기울여 바닥·벽을 쓸게
+    arm.add(tilt)
+    const beam = new THREE.Mesh(beamGeo, beamMat)
+    beam.userData.noShadow = true
+    beam.renderOrder = 3
+    tilt.add(beam)
+    const spot = new THREE.SpotLight(SIREN_RED, 0, 24, 0.3, 0.45, 1.1)
+    const target = new THREE.Object3D()
+    target.position.set(0, -10, 0)
+    tilt.add(spot, target)
+    spot.target = target
+    lights.push(spot)
+    spin.add(arm)
+  }
+
+  // 방 전체를 붉게 물들이는 점멸광
+  const wash = new THREE.HemisphereLight(0xff3b3b, 0x7a0000, 0)
+  g.add(wash)
+
+  // 작은 회전 경광등 (공정장비 2대 위 + 벽 모서리)
+  const miniBeamGeo = new THREE.ConeGeometry(0.28, 1.3, 16, 1, true)
+  miniBeamGeo.translate(0, -0.65, 0)
+  miniBeamGeo.rotateZ(Math.PI / 2) // 옆으로 뻗는 빛
+  const minis = [[-5.55, 2.22, 3.3], [-5.45, 2.62, 0.55], [-6.72, 4.42, -5.72]].map(([x, y, z], i) => {
+    const m = new THREE.Group()
+    m.name = `siren_mini_${i}`
+    m.position.set(x, y, z)
+    m.add(cyl(`siren_mini_${i}_base`, 0.11, 0.12, 0.06, MAT.greyDark, 0, 0.03, 0, 16))
+    const mat = domeMat.clone()
+    const d = new THREE.Mesh(new THREE.SphereGeometry(0.1, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2), mat)
+    d.position.y = 0.06
+    m.add(d)
+    const s = new THREE.Group()
+    s.position.y = 0.11
+    const b1 = new THREE.Mesh(miniBeamGeo, beamMat)
+    const b2 = new THREE.Mesh(miniBeamGeo, beamMat)
+    b2.rotation.y = Math.PI
+    b1.userData.noShadow = b2.userData.noShadow = true
+    s.add(b1, b2)
+    m.add(s)
+    m.visible = false
+    g.add(m)
+    return { m, mat, s, phase: i * 1.7 }
+  })
+
+  let level = 0
+  return {
+    update(dt, t, on) {
+      level += ((on ? 1 : 0) - level) * Math.min(1, dt * (on ? 6 : 10))
+      if (level < 0.002) level = 0
+      // 사이렌 본체(마운트·돔)는 온도 위험일 때만 보이게. 조명은 그대로 두고 밝기만 0으로(재컴파일 방지)
+      mount.visible = dome.visible = level > 0.01
+      spin.rotation.y = t * 3.4
+      const pulse = Math.max(0, Math.sin(t * 6.8)) ** 2 // 빛줄기가 두 번 지나갈 때마다 번쩍
+      for (const l of lights) l.intensity = level * 260
+      beamMat.opacity = level * (0.12 + pulse * 0.08)
+      wash.intensity = level * (0.25 + pulse * 0.85)
+      domeMat.emissiveIntensity = 0.2 + level * (1.2 + pulse * 1.5)
+      for (const mn of minis) {
+        mn.m.visible = level > 0.01
+        mn.s.rotation.y = t * 4.2 + mn.phase
+        mn.mat.emissiveIntensity = 0.3 + level * (1 + Math.max(0, Math.sin(t * 9 + mn.phase)) * 1.5)
+      }
+    },
+    level: () => level,
+  }
+}
+
 export function buildEffects(root) {
   const fx = new THREE.Group()
   fx.name = 'effects'
   root.add(fx)
+
+  // 온도 위험 사이렌
+  const siren = buildSiren(fx)
 
   // 가스 연기 / 먼지 덩어리
   const gasPuffs = new PuffSystem(fx, 46, 0xa6e87e)
@@ -340,6 +449,7 @@ export function buildEffects(root) {
   }
 
   function update(dt, t) {
+    siren.update(dt, t, scenario === 'temperature')
     // 가스 연기: 케미컬 벤치 상단(배기부)에서
     emitAcc += dt
     if (scenario === 'gas') {
@@ -452,6 +562,7 @@ export function buildEffects(root) {
       pressureGauge: +pGauge.get().toFixed(1),
       humidityGauge: +hGauge.get().toFixed(1),
       doorAngle: door ? +door.rotation.y.toFixed(3) : 0,
+      siren: +siren.level().toFixed(2),
     }),
   }
 }

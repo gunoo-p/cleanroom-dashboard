@@ -87,6 +87,7 @@ function renderScenario(key) {
   const danger = key !== 'normal'
   badge.textContent = danger ? `⚠ ${ui.labels[key] ?? key}` : '정상 운전'
   badge.classList.toggle('danger', danger)
+  $('alarm-vignette').classList.toggle('on', key === 'temperature') // 온도 위험: 화면 테두리 사이렌
   scene3d.setScenario(key)
 }
 
@@ -124,6 +125,7 @@ window.sim = {
       stats: $('stats').textContent,
       cards: Object.fromEntries(CARD_KEYS.map((k) => [k, $(`val-${k}`)?.textContent])),
       cardStatus: cards?.statuses() ?? null,
+      vignette: $('alarm-vignette').classList.contains('on'),
       logLines: $('log').children.length,
     }),
   },
