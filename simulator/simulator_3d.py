@@ -282,8 +282,8 @@ def main():
         url=os.path.join(WEB_DIR, "index.html"),
         js_api=api,
         width=1200,
-        height=780,
-        min_size=(980, 640),
+        height=860,
+        min_size=(980, 720),
         background_color="#0d1117",
     )
     api._window = window

@@ -29,7 +29,7 @@ const DEFAULT_CONFIG = {
 // 시나리오별 연출. particle은 아래 PARTICLE_MODES의 키.
 // 3D 영역은 참고 이미지처럼 밝은 배경 — 입자·안개 색도 밝은 배경에서 보이는 톤으로.
 const PRESETS = {
-  normal:      { particle: 'downflow', color: 0x4fbfc8, fogColor: 0xeef2f5, fog: 0.0,   glow: null,     beacon: false },
+  normal:      { particle: 'downflow', color: 0x4fbfc8, fogColor: 0x05070a, fog: 0.0,   glow: null,     beacon: false },
   temperature: { particle: 'rise',     color: 0xff6a1f, fogColor: 0xffd9c7, fog: 0.008, glow: 0xff3b1f, beacon: true },
   humidity:    { particle: 'rain',     color: 0x3b82f6, fogColor: 0xcfe0ff, fog: 0.018, glow: 0x3b82f6, beacon: true },
   gas:         { particle: 'leak',     color: 0x46b946, fogColor: 0xdff5cc, fog: 0.01,  glow: 0xc6e021, beacon: true },
@@ -38,7 +38,7 @@ const PRESETS = {
 }
 
 const PARTICLE_COUNT = 700
-const BG = 0xeef2f5
+const BG = 0x05070a // 방 바깥 배경: 검정
 
 // 이름 비교용: 소문자 + 영숫자만 남긴다 ("Gas_Cabinet-01" → "gascabinet01")
 const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '')
@@ -349,7 +349,7 @@ export function createScene(canvas, container, { onLog = () => {} } = {}) {
     setParticleMode(p.particle)
     scene.fog.color.setHex(p.fogColor)
     scene.fog.density = p.fog
-    scene.background.setHex(BG).lerp(new THREE.Color(p.fogColor), 0.35)
+    scene.background.setHex(BG).lerp(new THREE.Color(p.fogColor), 0.012) // 위험 시 배경에 살짝만 색이 돌게 (선형 색공간이라 작은 값도 꽤 밝아짐)
     beacon.visible = p.beacon
 
     resetGlow()

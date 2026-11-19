@@ -4,12 +4,13 @@
 // 화면 → 파이썬: pywebview.api.toggle() / set_scenario(key)
 // pywebview 없이 브라우저로 열면 '미리보기 모드'(서버 전송 없이 가짜 값만 표시)로 동작한다.
 import { createScene } from './scene.js'
+import { createSensorCards } from './sensorCards.js'
 
 const $ = (id) => document.getElementById(id)
 
 const CARD_KEYS = ['temperature', 'humidity', 'gas', 'air_quality', 'pressure']
-const CARD_COLORS = ['#60a5fa', '#f472b6', '#a78bfa', '#2dd4bf', '#facc15']
 const LOG_LIMIT = 300
+let cards = null // 대시보드 SensorBox와 같은 구성의 센서 카드
 
 // 미리보기 모드에서 쓰는 설정 (실제 값은 파이썬 get_config()가 simulator.py에서 가져와 준다)
 const PREVIEW_CONFIG = {
@@ -71,22 +72,7 @@ function buildUI(cfg) {
     row.appendChild(b)
   }
 
-  // 차압은 실내·실외 기압에서 계산한 값이라 SENSORS 목록에 없어 따로 붙인다.
-  const labels = { ...cfg.sensors, pressure: { label: '차압', unit: 'Pa' } }
-  const cards = $('cards')
-  cards.innerHTML = ''
-  CARD_KEYS.forEach((key, i) => {
-    const card = document.createElement('div')
-    card.className = 'card'
-    card.dataset.sensor = key
-    card.innerHTML = `
-      <div class="card-label"></div>
-      <div class="card-value" id="val-${key}" style="color:${CARD_COLORS[i]}">-</div>
-      <div class="card-unit"></div>`
-    card.querySelector('.card-label').textContent = labels[key]?.label ?? key
-    card.querySelector('.card-unit').textContent = labels[key]?.unit ?? ''
-    cards.appendChild(card)
-  })
+  cards = createSensorCards($('cards'))
 
   renderScenario(ui.scenario)
 }
@@ -96,9 +82,7 @@ function renderScenario(key) {
   document.querySelectorAll('.scenario-btn').forEach((b) => {
     b.classList.toggle('active', b.dataset.scenario === key)
   })
-  document.querySelectorAll('.card').forEach((c) => {
-    c.classList.toggle('alert', c.dataset.sensor === key)
-  })
+  cards?.highlight(key)
   const badge = $('status-badge')
   const danger = key !== 'normal'
   badge.textContent = danger ? `⚠ ${ui.labels[key] ?? key}` : '정상 운전'
@@ -116,10 +100,7 @@ function renderRunning(running) {
 // ── 파이썬에서 부르는 함수 ───────────────────
 window.sim = {
   onData({ values, ok, sent, failed }) {
-    for (const key of CARD_KEYS) {
-      const el = $(`val-${key}`)
-      if (el && values[key] !== undefined) el.textContent = String(values[key])
-    }
+    cards?.update(values)
     $('stats').textContent = `전송: ${sent}  실패: ${failed}`
     const data = Object.fromEntries(Object.entries(values).filter(([k]) => k !== 'device_id'))
     addLog(`${ok ? '✓' : '✗'} ${JSON.stringify(data)}`, ok ? 'ok' : 'fail')
@@ -142,6 +123,7 @@ window.sim = {
       badge: $('status-badge').textContent,
       stats: $('stats').textContent,
       cards: Object.fromEntries(CARD_KEYS.map((k) => [k, $(`val-${k}`)?.textContent])),
+      cardStatus: cards?.statuses() ?? null,
       logLines: $('log').children.length,
     }),
   },
