@@ -28,6 +28,10 @@ async def generate_day_summary(
         "제목이나 마크다운 서식(#, *, - 등) 없이 순수한 문장 2~3개로만 답하세요."
     )
 
+    return await _generate(prompt)
+
+
+async def _generate(prompt: str) -> str:
     if not GEMINI_API_KEY:
         raise RuntimeError("GEMINI_API_KEY가 설정되지 않음")
 
@@ -45,3 +49,22 @@ async def generate_day_summary(
         response.raise_for_status()
     parts = response.json().get("candidates", [{}])[0].get("content", {}).get("parts", [])
     return "".join(p.get("text", "") for p in parts).strip()
+
+
+async def generate_trend_insight(zone_label: str, period_label: str, sensors: list[dict]) -> str:
+    lines = [
+        f"- {s['sensor']}: 현재 {s['current']}{s['unit']}({s['status']}), "
+        f"시간당 {s['rate_per_hour']:+}{s['unit']}, "
+        f"위험 도달 예상 {'해당 없음' if s['eta_hours'] is None else str(s['eta_hours']) + '시간 후'}, "
+        f"AI 예측 끝값 {'없음' if s['forecast_end'] is None else str(s['forecast_end']) + s['unit']}"
+        for s in sensors
+    ]
+    prompt = (
+        f"다음은 반도체 클린룸({zone_label}) 최근 {period_label} 센서 추세와 Holt-Winters 시계열 모델의 예측입니다.\n"
+        + "\n".join(lines)
+        + "\n\n담당자가 지금 무엇을 주의해야 하는지 한국어로 2~3문장의 자연스러운 해설을 작성하세요. "
+        "위험 방향으로 움직이는 센서와, AI 예측이 경고·위험 수준에 가까워지는지 위주로 설명하세요. "
+        "모두 안정적이면 안정적으로 유지될 것으로 보인다고 간단히 언급하세요. "
+        "제목이나 마크다운 서식(#, *, - 등) 없이 순수한 문장 2~3개로만 답하세요."
+    )
+    return await _generate(prompt)

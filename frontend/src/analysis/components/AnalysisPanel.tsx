@@ -3,19 +3,23 @@
 import { TrendPanel } from './TrendPanel'
 import { EquipmentAnomalyCard } from './EquipmentAnomalyCard'
 import { CorrelationHeatmap } from './CorrelationHeatmap'
+import { AiInsightCard, type InsightState } from './AiInsightCard'
 import { THRESHOLDS, LABELS, COLORS } from '../config'
 import type { AnalysisView, TrendPanelData } from '../deriveAnalysis'
+import type { ForecastData, ForecastKey } from '../types'
 
-export type PanelKey = 'temp' | 'gas' | 'anomaly' | 'air' | 'pressure' | 'correlation'
+export type PanelKey = 'temp' | 'gas' | 'anomaly' | 'air' | 'insight' | 'pressure' | 'correlation'
 
-// 화면에 놓이는 행 구성(위→아래). 행 1: 설비 이상 예측 / 행 2: 공기질 추세 / 행 3: 환경 안정성
+// 화면에 놓이는 행 구성(위→아래). 행 1: 설비 이상 예측 / 행 2: 공기질 추세·AI 분석 / 행 3: 환경 안정성
 export const PANEL_ROWS: PanelKey[][] = [
   ['temp', 'gas', 'anomaly'],
-  ['air'],
+  ['air', 'insight'],
   ['pressure', 'correlation'],
 ]
 
 type TrendKey = 'temp' | 'gas' | 'air' | 'pressure'
+
+const FORECAST_KEY: Record<TrendKey, ForecastKey> = { temp: 'temp', gas: 'gas', air: 'pm', pressure: 'pressure' }
 
 interface TrendConfig {
   title: string
@@ -55,11 +59,16 @@ interface Props {
   isDark: boolean
   onClick?: () => void
   expanded?: boolean
+  forecast?: ForecastData
+  insight: { state: InsightState; summary?: string }
 }
 
-export function AnalysisPanel({ panelKey, view, isDark, onClick, expanded = false }: Props) {
+export function AnalysisPanel({ panelKey, view, isDark, onClick, expanded = false, forecast, insight }: Props) {
   if (panelKey === 'anomaly') {
     return <EquipmentAnomalyCard data={view.equipmentAnomaly} onClick={onClick} expanded={expanded} />
+  }
+  if (panelKey === 'insight') {
+    return <AiInsightCard {...insight} onClick={onClick} expanded={expanded} />
   }
   if (panelKey === 'correlation') {
     return <CorrelationHeatmap matrix={view.correlationMatrix} isDark={isDark} onClick={onClick} expanded={expanded} />
@@ -71,6 +80,7 @@ export function AnalysisPanel({ panelKey, view, isDark, onClick, expanded = fals
     <TrendPanel
       {...cfg}
       data={select(view)}
+      forecast={forecast?.series[FORECAST_KEY[panelKey]].points}
       isDark={isDark}
       warning={t.warning}
       danger={t.danger}

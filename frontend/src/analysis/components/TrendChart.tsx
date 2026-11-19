@@ -1,12 +1,13 @@
 // 실측값 + 이동평균 라인과 경고/위험 기준선을 그리는 추세 차트 (TrendPanel 내부용).
 import {
   ComposedChart, Line, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer,
-  ReferenceLine, ReferenceArea,
+  ReferenceLine, ReferenceArea, Area,
 } from 'recharts'
 import { COLORS } from '../config'
 import { formatHour } from '../format'
 import { chartTheme } from '../chartTheme'
-import type { TrendPanelData } from '../deriveAnalysis'
+import type { TrendPanelData, TrendPanelPoint } from '../deriveAnalysis'
+import type { ForecastPoint } from '../types'
 
 export interface TrendChartProps {
   data: TrendPanelData
@@ -19,11 +20,12 @@ export interface TrendChartProps {
   axisMin: number
   axisMax: number
   expanded?: boolean
+  forecast?: ForecastPoint[]
 }
 
-const SERIES_LABEL: Record<string, string> = { raw: '실측', ma: '이동평균' }
+const SERIES_LABEL: Record<string, string> = { raw: '실측', ma: '이동평균', forecast: 'AI 예측', band: '신뢰 구간' }
 
-export function TrendChart({ data, unit, isDark, rawColor, maColor, warning, danger, axisMin, axisMax, expanded }: TrendChartProps) {
+export function TrendChart({ data, unit, isDark, rawColor, maColor, warning, danger, axisMin, axisMax, expanded, forecast }: TrendChartProps) {
   const theme = chartTheme(isDark)
   const tickFontSize = expanded ? 13 : 10
   const labelFontSize = expanded ? 12 : 10
@@ -32,6 +34,14 @@ export function TrendChart({ data, unit, isDark, rawColor, maColor, warning, dan
     ? data.points[data.points.length - 8].t
     : null
   const lastT = data.points[data.points.length - 1]?.t
+
+  // 예측 행을 실측 뒤에 이어 붙인다. 마지막 실측 행에도 예측값(=마지막 이동평균)을 넣어 점선이 끊기지 않게 한다.
+  const chartData: (Partial<TrendPanelPoint> & { forecast?: number; band?: [number, number] })[] = forecast?.length
+    ? [
+        ...data.points.map((p, i) => (i === data.points.length - 1 ? { ...p, forecast: p.ma } : p)),
+        ...forecast.map(f => ({ t: f.t, forecast: f.value, band: [f.lower, f.upper] as [number, number] })),
+      ]
+    : data.points
 
   // 경고/위험 기준선이 가까우면 두 라벨이 같은 자리에 겹친다 — 위쪽 기준선의 라벨은 선 위에,
   // 아래쪽 기준선의 라벨은 선 아래에 붙여서 항상 서로 반대 방향으로 벌어지게 한다.
@@ -47,17 +57,18 @@ export function TrendChart({ data, unit, isDark, rawColor, maColor, warning, dan
     <ResponsiveContainer width="100%" height="100%" debounce={200}>
       {/* X축 눈금 라벨("14시")은 눈금 위치 기준 가운데 정렬이라, 마지막 눈금이 오른쪽 끝에 오면
           라벨의 절반이 SVG 밖으로 나가 '시'가 잘린다 — 오른쪽 여백을 라벨 반폭 이상으로 확보한다. */}
-      <ComposedChart data={data.points} margin={{ top: 6, right: expanded ? 22 : 16, left: -12, bottom: 0 }}>
+      <ComposedChart data={chartData} margin={{ top: 6, right: expanded ? 22 : 16, left: -12, bottom: 0 }}>
         <XAxis
           dataKey="t"
           tickFormatter={formatHour}
           tick={{ fontSize: tickFontSize, fill: theme.axis }}
           axisLine={false}
           tickLine={false}
-          interval={Math.max(0, Math.floor(data.points.length / 6))}
+          interval={Math.max(0, Math.floor(chartData.length / 6))}
         />
         <YAxis
           domain={[axisMin, axisMax]}
+          allowDataOverflow
           tick={{ fontSize: tickFontSize, fill: theme.axis }}
           axisLine={false}
           tickLine={false}
@@ -65,7 +76,12 @@ export function TrendChart({ data, unit, isDark, rawColor, maColor, warning, dan
         />
         <Tooltip
           labelFormatter={(label) => formatHour(String(label))}
-          formatter={(value, name) => [`${Number(value).toFixed(1)}${unit}`, SERIES_LABEL[String(name)] ?? name]}
+          formatter={(value, name) => [
+            Array.isArray(value)
+              ? `${Number(value[0]).toFixed(1)}~${Number(value[1]).toFixed(1)}${unit}`
+              : `${Number(value).toFixed(1)}${unit}`,
+            SERIES_LABEL[String(name)] ?? name,
+          ]}
           contentStyle={{ background: theme.tooltipBg, border: `1px solid ${theme.grid}`, fontSize: '0.75rem' }}
         />
         {expanded && (
@@ -94,6 +110,12 @@ export function TrendChart({ data, unit, isDark, rawColor, maColor, warning, dan
 
         <Line type="monotone" dataKey="raw" name="raw" stroke={rawColor} strokeWidth={expanded ? 1.5 : 1} dot={false} isAnimationActive={false} />
         <Line type="monotone" dataKey="ma" name="ma" stroke={maColor} strokeWidth={expanded ? 3 : 2.2} dot={false} isAnimationActive={false} />
+        {forecast?.length ? (
+          <>
+            <Area type="monotone" dataKey="band" name="band" stroke="none" fill={COLORS.forecast} fillOpacity={0.15} isAnimationActive={false} />
+            <Line type="monotone" dataKey="forecast" name="forecast" stroke={COLORS.forecast} strokeWidth={expanded ? 2.5 : 2} strokeDasharray="5 4" dot={false} isAnimationActive={false} />
+          </>
+        ) : null}
       </ComposedChart>
     </ResponsiveContainer>
   )

@@ -3,10 +3,10 @@
 import { useCallback, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import type { TabProps } from '../tabs'
-import type { AnalysisData, AnalysisPeriod } from './types'
-import { fetchAnalysis } from './api'
-import { deriveAnalysis } from './deriveAnalysis'
-import { PERIOD_OPTIONS } from './config'
+import type { AnalysisData, AnalysisPeriod, ForecastData } from './types'
+import { fetchAnalysis, fetchForecast, fetchInsight } from './api'
+import { deriveAnalysis, buildInsightRequest } from './deriveAnalysis'
+import { PERIOD_OPTIONS, AI } from './config'
 import { AnalysisHeader } from './components/AnalysisHeader'
 import { AnalysisPanel, PANEL_ROWS, type PanelKey } from './components/AnalysisPanel'
 import { PanelExpandOverlay } from './components/PanelExpandOverlay'
@@ -48,7 +48,31 @@ export function AnalysisTab({ isDark, zone, onZoneChange }: TabProps) {
     retry: false,
   })
 
+  // AI 예측은 실패해도 기존 화면을 막지 않도록 분석 데이터와 따로 불러온다.
+  const forecastQuery = useQuery<ForecastData>({
+    queryKey: ['forecast', deviceId, period],
+    queryFn: () => fetchForecast(deviceId, periodOption),
+    refetchInterval: 60_000,
+    retry: false,
+  })
+  const forecast = forecastQuery.data
+
   const view = useMemo(() => current ? deriveAnalysis(current) : null, [current])
+
+  // Gemini 해설은 쿼터 보호를 위해 구역·기간마다 한 번, 10분 캐시. 예측이 끝난 뒤(성공이든 실패든) 요청한다.
+  const insightQuery = useQuery<string>({
+    queryKey: ['insight', deviceId, period],
+    queryFn: () => fetchInsight(buildInsightRequest(view!, forecast, zone, periodOption.label)),
+    enabled: !!view && !forecastQuery.isPending,
+    staleTime: AI.insightStaleMs,
+    refetchInterval: false,
+    refetchOnWindowFocus: false,
+    retry: false,
+  })
+  const insight = {
+    state: insightQuery.isError ? 'error' as const : insightQuery.data ? 'ready' as const : 'loading' as const,
+    summary: insightQuery.data,
+  }
 
   function openPanel(key: PanelKey) {
     const el = panelRefs.current[key]
@@ -91,6 +115,8 @@ export function AnalysisTab({ isDark, zone, onZoneChange }: TabProps) {
                     panelKey={key}
                     view={view}
                     isDark={isDark}
+                    forecast={forecast}
+                    insight={insight}
                     onClick={expanded ? undefined : () => openPanel(key)}
                   />
                 </div>
@@ -102,7 +128,7 @@ export function AnalysisTab({ isDark, zone, onZoneChange }: TabProps) {
 
       {expanded && view && (
         <PanelExpandOverlay sourceRect={expanded.sourceRect} targetRect={expanded.targetRect} onClosed={closePanel}>
-          <AnalysisPanel panelKey={expanded.key} view={view} isDark={isDark} expanded />
+          <AnalysisPanel panelKey={expanded.key} view={view} isDark={isDark} forecast={forecast} insight={insight} expanded />
         </PanelExpandOverlay>
       )}
     </div>

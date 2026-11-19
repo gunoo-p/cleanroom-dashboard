@@ -318,8 +318,8 @@
   flex: 1;
   min-width: 0;
   display: grid;
-  grid-template-columns: var(--hm-label-w) repeat(5, minmax(0, 1fr));
-  grid-template-rows: auto repeat(5, minmax(18px, 1fr));
+  grid-template-columns: var(--hm-label-w) repeat(4, minmax(0, 1fr));
+  grid-template-rows: auto repeat(4, minmax(18px, 1fr));
   gap: 4px;
   font-size: 0.68rem;
 }
@@ -502,4 +502,24 @@
   .analysis-panel.is-clickable:hover {
     transform: none;
   }
+}
+
+/* AI 분석 카드 */
+.ai-insight__text {
+  flex: 1;
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.65;
+  color: var(--an-text);
+}
+.ai-insight__text.is-muted {
+  color: var(--an-muted);
+}
+.analysis-panel.is-expanded .ai-insight__text {
+  font-size: 1.05rem;
+}
+.ai-insight__models {
+  margin: 0;
+  font-size: 0.72rem;
+  color: var(--an-muted);
 }
