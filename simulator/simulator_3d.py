@@ -232,25 +232,54 @@ def selftest(window, api, result):
             )
         js("document.querySelector('[data-scenario=\"normal\"]').click()")
 
-        # 코드로 만든 클린룸이면 작업자 대피·복귀까지 확인 (GLB 모델이면 작업자가 없으므로 건너뜀)
+        # 코드로 만든 클린룸이면 작업자 행동까지 확인 (GLB 모델이면 작업자가 없으므로 건너뜀)
         if info().get("model"):
-            print("[selftest] 작업자 대피 → 복귀", flush=True)
-            time.sleep(8)  # 앞 단계에서 대피하던 작업자가 자리로 돌아올 시간
-            js("document.querySelector('[data-scenario=\"temperature\"]').click()")
-            workers = {}
-            for _ in range(60):
-                time.sleep(0.25)
-                workers = info()["model"]["workers"]
-                if workers.get("gathered") == 7:
-                    break
-            check("위험 시 7명 문 앞 집결", workers.get("gathered") == 7, str(workers))
-            js("document.querySelector('[data-scenario=\"normal\"]').click()")
-            for _ in range(60):
-                time.sleep(0.25)
-                workers = info()["model"]["workers"]
-                if workers.get("work") == 6 and workers.get("loop") == 1:
-                    break
-            check("정상 복귀 시 제자리 작업", workers.get("work") == 6 and workers.get("loop") == 1, str(workers))
+            print("[selftest] 작업자 상황별 행동", flush=True)
+
+            def click(key):
+                js(f"document.querySelector('[data-scenario=\"{key}\"]').click()")
+
+            def wait_workers(cond, timeout=15):
+                w = {}
+                for _ in range(int(timeout / 0.25)):
+                    time.sleep(0.25)
+                    w = info()["model"]["workers"]
+                    if cond(w):
+                        break
+                return w
+
+            def home(w):
+                return w["modes"].get("work") == 6 and w["modes"].get("loop") == 1
+
+            check("시작 전 제자리 복귀", bool(home(wait_workers(home, 20))))
+
+            click("temperature")
+            w = wait_workers(lambda w: w["modes"].get("act") == 7)
+            acts = w["acts"]
+            check("온도: 부채질·걱정·다급한 작업으로 나뉨",
+                  acts.get("fan", 0) >= 3 and acts.get("worried", 0) >= 1 and acts.get("work_fast") == 1, str(w))
+
+            click("humidity")
+            w = wait_workers(lambda w: w["acts"].get("umbrella") == 7)
+            check("습도: 7명 우산 펼침", w["acts"].get("umbrella") == 7, str(w))
+
+            click("gas")
+            w = wait_workers(lambda w: w["acts"].get("cover") == 7)
+            check("가스: 7명 입 막고 문 앞 대피", w["acts"].get("cover") == 7, str(w))
+
+            # 위험이 연달아 바뀌면 대피한 자리에서 바로 다음 행동으로
+            click("pressure")
+            w = wait_workers(lambda w: w["acts"].get("push") == 3 and w["modes"].get("act") == 7)
+            check("차압(연속 전환): 3명 문 밀기 + 4명 걱정",
+                  w["acts"].get("push") == 3 and w["acts"].get("worried") == 4, str(w))
+
+            click("air_quality")
+            w = wait_workers(lambda w: w["modes"].get("act") == 7)
+            check("공기질: 기침·먼지 휘젓기", w["acts"].get("cough", 0) >= 3 and w["acts"].get("swat", 0) >= 3, str(w))
+
+            click("normal")
+            w = wait_workers(home, 25)
+            check("정상 복귀 시 제자리 작업", bool(home(w)), str(w))
 
         print("[selftest] 실행 버튼 → 실제 전송 → 카드 갱신", flush=True)
         js("document.getElementById('run-btn').click()")

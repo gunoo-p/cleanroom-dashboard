@@ -52,7 +52,7 @@ export function buildCleanroom() {
       targetColor.setHex(curtain.color)
       const alarm = scenario !== 'normal'
       setScreensAlarm(alarm)
-      workers.setAlarm(alarm)
+      workers.setScenario(scenario)
     },
     update(dt, t) {
       flowCurtains(dt, curtain.speed)
