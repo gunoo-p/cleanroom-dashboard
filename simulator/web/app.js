@@ -222,9 +222,8 @@ async function init() {
 
   try {
     const info = await scene3d.ready
-    $('model-hint').textContent = info.source === 'glb'
-      ? `모델: ${info.file}`
-      : '임시 모형 · web/models/model.glb 를 넣으면 교체됩니다'
+    // 코드로 만든 기본 클린룸이면 안내 없음, GLB로 교체했을 때만 파일명 표시
+    $('model-hint').textContent = info.source === 'glb' ? `모델: ${info.file}` : ''
   } catch { /* scene.js가 로그로 알림 */ }
 }
 

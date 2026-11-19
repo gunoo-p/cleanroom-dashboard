@@ -1,14 +1,14 @@
-// 3D 클린룸 장면. models/model.glb가 있으면 그걸, 없으면 임시 모형(placeholder.js)을 띄우고
+// 3D 클린룸 장면. models/model.glb가 있으면 그걸, 없으면 코드로 만든 클린룸 모형(cleanroom/)을 띄우고
 // 시나리오에 따라 효과(부품 발광 · 입자 · 안개 · 경광등 · 모델 애니메이션)를 바꾼다.
 //
-// GLB와 임시 모형은 완전히 같은 코드 경로를 탄다:
+// GLB와 코드 모형은 같은 코드 경로를 탄다 (코드 모형은 hooks로 화면·커튼·작업자 연출을 추가):
 //   부품 찾기  → models/model-config.json의 targets 키워드로 이름 매칭
 //   애니메이션 → config의 animations에 적힌 클립, 비어 있으면 시나리오 이름이 들어간 클립 자동 선택
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
-import { buildPlaceholder } from './placeholder.js'
+import { buildCleanroom } from './cleanroom/index.js'
 
 export const SCENARIO_KEYS = ['normal', 'temperature', 'humidity', 'gas', 'air_quality', 'pressure']
 
@@ -17,8 +17,8 @@ const DEFAULT_CONFIG = {
   file: 'model.glb',
   targets: {
     temperature: ['process_tool', 'hvac', 'heater', 'chiller'],
-    humidity: ['hvac', 'humid'],
-    gas: ['gas'],
+    humidity: ['ffu', 'hvac', 'humid'],
+    gas: ['chem_bench', 'gas'],
     air_quality: ['ffu', 'filter', 'vent', 'duct'],
     pressure: ['door', 'gate', 'airlock'],
   },
@@ -27,17 +27,18 @@ const DEFAULT_CONFIG = {
 }
 
 // 시나리오별 연출. particle은 아래 PARTICLE_MODES의 키.
+// 3D 영역은 참고 이미지처럼 밝은 배경 — 입자·안개 색도 밝은 배경에서 보이는 톤으로.
 const PRESETS = {
-  normal:      { particle: 'downflow', color: 0xbfe9ff, fogColor: 0x0a0f1a, fog: 0.0,   glow: null,     beacon: false },
-  temperature: { particle: 'rise',     color: 0xff7a2f, fogColor: 0x2a0f08, fog: 0.02,  glow: 0xff3b1f, beacon: true },
-  humidity:    { particle: 'rain',     color: 0x6ab7ff, fogColor: 0x12385c, fog: 0.06,  glow: 0x3b82f6, beacon: true },
-  gas:         { particle: 'leak',     color: 0x7dff6a, fogColor: 0x0f2a12, fog: 0.03,  glow: 0xd4ff2f, beacon: true },
-  air_quality: { particle: 'dust',     color: 0xc8b08c, fogColor: 0x2e2a22, fog: 0.07,  glow: 0xf59e0b, beacon: true },
-  pressure:    { particle: 'inflow',   color: 0xffd6d6, fogColor: 0x1a0a0a, fog: 0.015, glow: 0xef4444, beacon: true },
+  normal:      { particle: 'downflow', color: 0x4fbfc8, fogColor: 0xeef2f5, fog: 0.0,   glow: null,     beacon: false },
+  temperature: { particle: 'rise',     color: 0xff6a1f, fogColor: 0xffd9c7, fog: 0.008, glow: 0xff3b1f, beacon: true },
+  humidity:    { particle: 'rain',     color: 0x3b82f6, fogColor: 0xcfe0ff, fog: 0.018, glow: 0x3b82f6, beacon: true },
+  gas:         { particle: 'leak',     color: 0x46b946, fogColor: 0xdff5cc, fog: 0.01,  glow: 0xc6e021, beacon: true },
+  air_quality: { particle: 'dust',     color: 0x8a7356, fogColor: 0xd9cdb8, fog: 0.02,  glow: 0xf59e0b, beacon: true },
+  pressure:    { particle: 'inflow',   color: 0x56677a, fogColor: 0xffe3e3, fog: 0.006, glow: 0xef4444, beacon: true },
 }
 
 const PARTICLE_COUNT = 700
-const BG = 0x0a0f1a
+const BG = 0xeef2f5
 
 // 이름 비교용: 소문자 + 영숫자만 남긴다 ("Gas_Cabinet-01" → "gascabinet01")
 const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '')
@@ -69,7 +70,9 @@ export function createScene(canvas, container, { onLog = () => {} } = {}) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
   renderer.toneMapping = THREE.ACESFilmicToneMapping
-  renderer.toneMappingExposure = 1.0
+  renderer.toneMappingExposure = 1.15
+  renderer.shadowMap.enabled = true
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap
 
   const scene = new THREE.Scene()
   scene.background = new THREE.Color(BG)
@@ -77,10 +80,19 @@ export function createScene(canvas, container, { onLog = () => {} } = {}) {
   // GLB의 PBR 재질(금속·거칠기)이 제 색으로 보이려면 환경광이 필요하다.
   const pmrem = new THREE.PMREMGenerator(renderer)
   scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture
-  scene.add(new THREE.HemisphereLight(0xbfd4ff, 0x1a2230, 0.5))
-  const sun = new THREE.DirectionalLight(0xffffff, 1.2)
-  sun.position.set(6, 10, 8)
-  scene.add(sun)
+  scene.add(new THREE.HemisphereLight(0xffffff, 0xd5dee8, 0.9))
+  // 부드러운 그림자를 만드는 주광 — 그림자 범위는 모델 크기에 맞춰 아래에서 조정
+  const sun = new THREE.DirectionalLight(0xffffff, 1.6)
+  sun.position.set(8, 16, 10)
+  sun.castShadow = true
+  sun.shadow.mapSize.set(2048, 2048)
+  sun.shadow.bias = -0.0004
+  sun.shadow.normalBias = 0.02
+  sun.shadow.radius = 4
+  scene.add(sun, sun.target)
+  const fill = new THREE.DirectionalLight(0xe8f4ff, 0.5)
+  fill.position.set(-10, 8, 6)
+  scene.add(fill)
 
   const camera = new THREE.PerspectiveCamera(45, 1, 0.05, 500)
   const controls = new OrbitControls(camera, canvas)
@@ -99,6 +111,8 @@ export function createScene(canvas, container, { onLog = () => {} } = {}) {
     clips: [],
     activeClip: null,
     pendingScenario: null,
+    hooks: null,        // 코드 모형 고유 연출 (setScenario / update / info)
+    view: null,         // 처음 카메라 시점
   }
   let mixer = null
   let currentAction = null
@@ -111,8 +125,8 @@ export function createScene(canvas, container, { onLog = () => {} } = {}) {
   const pGeo = new THREE.BufferGeometry()
   pGeo.setAttribute('position', new THREE.BufferAttribute(pos, 3))
   const pMat = new THREE.PointsMaterial({
-    size: 0.09, map: dotTexture(), transparent: true, opacity: 0.85,
-    depthWrite: false, blending: THREE.AdditiveBlending, color: PRESETS.normal.color,
+    size: 0.08, map: dotTexture(), transparent: true, opacity: 0.8,
+    depthWrite: false, color: PRESETS.normal.color,
   })
   const points = new THREE.Points(pGeo, pMat)
   points.frustumCulled = false
@@ -352,6 +366,8 @@ export function createScene(canvas, container, { onLog = () => {} } = {}) {
       currentAction.reset().setLoop(THREE.LoopRepeat, Infinity).fadeIn(0.3).play()
       state.activeClip = clip.name
     }
+
+    state.hooks?.setScenario?.(state.scenario)
   }
 
   function setScenario(key) {
@@ -408,21 +424,55 @@ export function createScene(canvas, container, { onLog = () => {} } = {}) {
         onLog(`3D 모델을 읽지 못해 임시 모형으로 표시합니다 (${url}): ${e.message || e}`, 'fail')
       }
     }
-    const ph = buildPlaceholder()
-    return { ...ph, source: 'placeholder', file: null, cfg }
+    const built = buildCleanroom()
+    return { ...built, source: 'builtin', file: null, cfg }
   }
 
+  // 시점: 방위각(azimuth, +z에서 +x 쪽으로 도는 각도)·고도(elevation)로 모델 전체가 들어오게 배치
   function frameCamera() {
+    const v = { azimuth: 38, elevation: 32, fov: 32, fit: 1.1, ...(state.view || {}) }
     const b = state.bounds
     const c = b.getCenter(new THREE.Vector3())
     const size = b.getSize(new THREE.Vector3())
-    const d = Math.max(size.x, size.z) * 1.05
-    camera.position.set(c.x + d * 0.55, c.y + d * 0.55, c.z + d * 0.75)
-    controls.target.set(c.x, b.min.y + size.y * 0.3, c.z)
-    camera.near = d / 200
-    camera.far = d * 20
+    const radius = size.length() / 2
+    camera.fov = v.fov
+    const dist = (radius / Math.sin(THREE.MathUtils.degToRad(v.fov / 2))) * 0.62 * v.fit
+    const az = THREE.MathUtils.degToRad(v.azimuth)
+    const el = THREE.MathUtils.degToRad(v.elevation)
+    controls.target.set(c.x, b.min.y + size.y * 0.25, c.z)
+    camera.position.set(
+      controls.target.x + Math.sin(az) * Math.cos(el) * dist,
+      controls.target.y + Math.sin(el) * dist,
+      controls.target.z + Math.cos(az) * Math.cos(el) * dist,
+    )
+    camera.near = dist / 100
+    camera.far = dist * 10
     camera.updateProjectionMatrix()
+    controls.maxPolarAngle = THREE.MathUtils.degToRad(85) // 바닥 아래로 못 내려가게
+    controls.minDistance = dist * 0.3
+    controls.maxDistance = dist * 2.5
     controls.update()
+
+    // 그림자 범위를 모델 크기에 맞춤
+    const sc = sun.shadow.camera
+    sc.left = sc.bottom = -radius
+    sc.right = sc.top = radius
+    sc.near = 0.5
+    sc.far = radius * 6
+    sun.target.position.copy(c)
+    sun.position.set(c.x + radius * 0.6, c.y + radius * 1.6, c.z + radius * 0.9)
+    sc.updateProjectionMatrix()
+  }
+
+  // 그림자: 불투명한 메시만 그림자를 만들고 받는다 (유리·공기 커튼·화면 제외)
+  function setupShadows(root) {
+    root.traverse((o) => {
+      if (!o.isMesh) return
+      const mats = Array.isArray(o.material) ? o.material : [o.material]
+      const see = mats.some((m) => m.transparent)
+      o.castShadow = !see && !o.userData.noShadow && !o.userData.receiveOnly
+      o.receiveShadow = !see
+    })
   }
 
   const readyPromise = (async () => {
@@ -434,15 +484,22 @@ export function createScene(canvas, container, { onLog = () => {} } = {}) {
     state.file = content.file
     state.config = content.cfg
     state.clips = content.clips
+    state.hooks = content.hooks || null
+    state.view = content.view || null
     const box = new THREE.Box3().setFromObject(content.root)
     if (!box.isEmpty()) state.bounds = box
     state.targets = findTargets(content.root, content.cfg)
     if (state.clips.length) mixer = new THREE.AnimationMixer(content.root)
+    setupShadows(content.root)
 
-    // 경광등은 모델 꼭대기 가운데에 매단다.
-    const top = state.bounds.getCenter(new THREE.Vector3())
-    top.y = state.bounds.max.y - 0.15
-    beacon.position.copy(top)
+    // 경광등: 모형이 위치를 정해 주면 거기, 아니면 모델 꼭대기 가운데
+    if (content.anchors?.beacon) {
+      beacon.position.copy(content.anchors.beacon)
+    } else {
+      const top = state.bounds.getCenter(new THREE.Vector3())
+      top.y = state.bounds.max.y - 0.15
+      beacon.position.copy(top)
+    }
     wash.distance = state.bounds.getSize(v3a).length() * 1.5
 
     frameCamera()
@@ -475,6 +532,7 @@ export function createScene(canvas, container, { onLog = () => {} } = {}) {
     controls.update()
     if (state.ready) {
       mixer?.update(dt)
+      state.hooks?.update?.(dt, t)
       updateParticles(dt, t)
       updateGlow(t)
       if (beacon.visible) {
@@ -503,6 +561,7 @@ export function createScene(canvas, container, { onLog = () => {} } = {}) {
       clips: state.clips.map((c) => c.name),
       targets,
       frames,
+      model: state.hooks?.info?.() ?? null,
     }
   }
 

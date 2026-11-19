@@ -2,8 +2,8 @@
   "file": "model.glb",
   "targets": {
     "temperature": ["process_tool", "hvac", "heater", "chiller"],
-    "humidity": ["hvac", "humid"],
-    "gas": ["gas"],
+    "humidity": ["ffu", "hvac", "humid"],
+    "gas": ["chem_bench", "gas"],
     "air_quality": ["ffu", "filter", "vent", "duct"],
     "pressure": ["door", "gate", "airlock"]
   },

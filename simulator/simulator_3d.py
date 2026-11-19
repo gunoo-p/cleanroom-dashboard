@@ -232,6 +232,26 @@ def selftest(window, api, result):
             )
         js("document.querySelector('[data-scenario=\"normal\"]').click()")
 
+        # 코드로 만든 클린룸이면 작업자 대피·복귀까지 확인 (GLB 모델이면 작업자가 없으므로 건너뜀)
+        if info().get("model"):
+            print("[selftest] 작업자 대피 → 복귀", flush=True)
+            time.sleep(8)  # 앞 단계에서 대피하던 작업자가 자리로 돌아올 시간
+            js("document.querySelector('[data-scenario=\"temperature\"]').click()")
+            workers = {}
+            for _ in range(60):
+                time.sleep(0.25)
+                workers = info()["model"]["workers"]
+                if workers.get("gathered") == 7:
+                    break
+            check("위험 시 7명 문 앞 집결", workers.get("gathered") == 7, str(workers))
+            js("document.querySelector('[data-scenario=\"normal\"]').click()")
+            for _ in range(60):
+                time.sleep(0.25)
+                workers = info()["model"]["workers"]
+                if workers.get("work") == 6 and workers.get("loop") == 1:
+                    break
+            check("정상 복귀 시 제자리 작업", workers.get("work") == 6 and workers.get("loop") == 1, str(workers))
+
         print("[selftest] 실행 버튼 → 실제 전송 → 카드 갱신", flush=True)
         js("document.getElementById('run-btn').click()")
         time.sleep(1.5)
