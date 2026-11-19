@@ -318,8 +318,8 @@
   flex: 1;
   min-width: 0;
   display: grid;
-  grid-template-columns: var(--hm-label-w) repeat(5, minmax(0, 1fr));
-  grid-template-rows: auto repeat(5, minmax(18px, 1fr));
+  grid-template-columns: var(--hm-label-w) repeat(4, minmax(0, 1fr));
+  grid-template-rows: auto repeat(4, minmax(18px, 1fr));
   gap: 4px;
   font-size: 0.68rem;
 }
