@@ -1,0 +1,22 @@
+{
+  "file": "model.glb",
+  "targets": {
+    "temperature": ["process_tool", "hvac", "heater", "chiller"],
+    "humidity": ["ffu", "hvac", "humid"],
+    "gas": ["chem_bench", "gas"],
+    "air_quality": ["ffu", "filter", "vent", "duct"],
+    "pressure": ["door", "gate", "airlock"]
+  },
+  "animations": {
+    "normal": "",
+    "temperature": "",
+    "humidity": "",
+    "gas": "",
+    "air_quality": "",
+    "pressure": ""
+  },
+  "transform": {
+    "fitSize": 12,
+    "rotationY": 0
+  }
+}
