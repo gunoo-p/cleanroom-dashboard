@@ -2,7 +2,8 @@
 //   평소: 각자 장비 앞에서 작업, 1명은 웨이퍼 트레이를 들고 순회
 //   위험: 시나리오마다 다른 행동(PLANS) + 머리 위 말풍선
 //     온도 부채질·뒷걸음 / 습도 우산 / 가스 입 막고 문 앞 대피 / 공기질 기침·먼지 휘젓기 / 차압 3명이 문 밀어 막기
-//   위험이 연달아 바뀌면 지금 위치에서 바로 다음 행동으로 (통로 지점 NODES를 따라 장비를 피해 이동)
+//   위험마다 7명 모두 새 자리로 이동(PLANS 대형). 이동 경로는 nav.js 격자 길찾기로 장비·벽을 피함
+//   걷는 사람끼리·장비와 겹치지 않게 매 프레임 밀어냄
 //   정상 복귀: 제자리로 돌아가 작업 재개 (♪ 말풍선)
 import * as THREE from 'three'
 import { COLOR, MAT, rbox, cyl } from './parts.js'
@@ -20,6 +21,7 @@ const BADGES = [0x2fb3b5, 0xff8a65, 0xffc947, 0x9b7bff, 0x4f9dff, 0x5cc977, 0xff
 const WORKER_SCALE = 1.15
 
 const WALK_SPEED = 1.5
+const ARRIVE = 0.25 // 목표점 이만큼 안이면 도착으로 침
 
 function capsule(name, r, len, mat) {
   const m = new THREE.Mesh(new THREE.CapsuleGeometry(r, len, 6, 12), mat)
@@ -154,102 +156,71 @@ function lerpAngle(a, b, t) {
   return a + d * t
 }
 
-// ── 통로 길찾기 ────────────────────────────────
-// 장비 사이 통로의 지점들. 어디서 어디로 가든 이 지점들을 따라 걸어 장비를 피한다.
-const NODES = {
-  n0: [-2.6, 3.4], n1: [0.0, 4.6], n2: [3.2, 4.4], n3: [3.4, 1.0], n4: [0.3, -0.9], n5: [-2.6, -0.9],
-  hub: [5.0, -1.6], e1: [6.2, 0.6], b1: [-2.85, -2.9],
-}
-const EDGES = [
-  ['n0', 'n1'], ['n1', 'n2'], ['n2', 'n3'], ['n3', 'n4'], ['n4', 'n5'], ['n5', 'n0'],
-  ['n3', 'hub'], ['n4', 'hub'], ['hub', 'e1'], ['b1', 'n5'], ['b1', 'n4'],
-]
-const ADJ = {}
-for (const [a, b] of EDGES) {
-  const d = Math.hypot(NODES[a][0] - NODES[b][0], NODES[a][1] - NODES[b][1])
-  ;(ADJ[a] ||= []).push([b, d])
-  ;(ADJ[b] ||= []).push([a, d])
-}
-function route(from, to) { // 가장 짧은 지점 경로 (다익스트라)
-  const dist = { [from]: 0 }
-  const prev = {}
-  const left = new Set(Object.keys(NODES))
-  while (left.size) {
-    let u = null
-    for (const k of left) if (dist[k] !== undefined && (u === null || dist[k] < dist[u])) u = k
-    if (u === null || u === to) break
-    left.delete(u)
-    for (const [v, w] of ADJ[u] || []) {
-      if (dist[u] + w < (dist[v] ?? Infinity)) { dist[v] = dist[u] + w; prev[v] = u }
-    }
-  }
-  const path = [to]
-  while (path[0] !== from && prev[path[0]]) path.unshift(prev[path[0]])
-  return path
-}
-function nearestNode(x, z) {
-  let best = null
-  let bd = Infinity
-  for (const [k, [nx, nz]] of Object.entries(NODES)) {
-    const d = Math.hypot(nx - x, nz - z)
-    if (d < bd) { bd = d; best = k }
-  }
-  return best
-}
-
 // ── 작업 위치 ─────────────────────────────────
-// home: 평소 서 있는 곳·방향 / node: 통로로 나갈 때 들르는 지점 / entry: home과 node 사이 경유지
+// home(x, z, face): 평소 서 있는 곳·바라보는 방향
 const STATIONS = [
-  { name: 'worker_bench', x: -2.85, z: -3.85, face: Math.PI, node: 'b1', entry: [] },          // 케미컬 벤치
-  { name: 'worker_kiosk', x: 3.4, z: -2.45, face: 2.8, node: 'hub', entry: [] },                // 노광장비 단말기
-  { name: 'worker_tool', x: -4.15, z: 0.75, face: -Math.PI / 2, node: 'n5', entry: [] },        // 공정장비 2
+  { name: 'worker_bench', x: -2.85, z: -3.85, face: Math.PI },          // 케미컬 벤치
+  { name: 'worker_kiosk', x: 3.4, z: -2.45, face: 2.8 },                // 노광장비 단말기
+  { name: 'worker_tool', x: -4.15, z: 0.75, face: -Math.PI / 2 },       // 공정장비 2
   // 검사대 작업자는 옆에 서서 현미경을 봄 (뒤에 서면 키가 작아 책상에 가려짐)
-  { name: 'worker_insp1', x: -0.2, z: 0.75, face: -Math.PI / 2, node: 'n4', entry: [] },        // 검사대 1 오른쪽
-  { name: 'worker_insp2', x: 0.68, z: 2.85, face: Math.PI / 2 - 0.15, node: 'n4', entry: [[0.6, 1.6]] }, // 검사대 2 왼쪽
-  { name: 'worker_cart', x: 5.85, z: 1.8, face: -1.92, node: 'e1', entry: [] },                 // FOUP 카트
+  { name: 'worker_insp1', x: -0.2, z: 0.75, face: -Math.PI / 2 },       // 검사대 1 오른쪽
+  { name: 'worker_insp2', x: 0.68, z: 2.85, face: Math.PI / 2 - 0.15 }, // 검사대 2 왼쪽
+  { name: 'worker_cart', x: 5.85, z: 1.8, face: -1.92 },                // FOUP 카트
 ]
-// 순회 작업자 루프 = 통로 지점 n0→n5
-const LOOP = ['n0', 'n1', 'n2', 'n3', 'n4', 'n5']
+// 순회 작업자가 도는 지점 (사이 경로는 길찾기로 장비를 피해 이어 붙임)
+const LOOP = [[-2.6, 3.4], [0.0, 4.6], [3.2, 4.4], [3.4, 1.0], [0.3, -0.9], [-2.6, -0.9]]
 
-const DOOR = [4.6, -5.7]
-const SLOTS = [ // 가스 대피 때 출입문 앞 집결 위치
-  [4.4, -4.5], [5.2, -4.5], [6.0, -4.4], [4.4, -3.7], [5.2, -3.7], [6.0, -3.6], [5.2, -2.9],
-]
-const PUSH_SPOTS = [[4.2, -5.0], [4.65, -4.95], [5.1, -5.0]] // 차압 때 문을 밀어 막는 자리
+// 바라볼 대상
+const LOOK = {
+  door: [4.6, -5.7],     // 출입문
+  hot: [-5.8, 2.0],      // 뜨거워진 공정장비 쪽
+  gauge: [5.45, -5.7],   // 차압계
+  kiosk1: [-4.35, 4.85], // 공정장비 단말기
+}
 
-// ── 시나리오별 행동표 ──────────────────────────
+// ── 시나리오별 대형 ────────────────────────────
+// 위험마다 7명 모두 새 자리(at)로 이동해 행동(act). 위험이 바뀌면 지금 위치에서 다음 대형으로 바로 이동.
 // 작업자 순서: 0 벤치, 1 단말기, 2 공정장비, 3 검사대1, 4 검사대2, 5 카트, 6 순회
-// go: 'stay'(그 자리) | 'slot'(문 앞 집결) | 'push'(문 밀기 자리) | {x, z, face?, direct?}
-// face: 'door'면 문 쪽을 봄
+// face: 숫자(각도) | 'door' | 'hot' | 'gauge' | 'kiosk1' | [x, z](그 점을 봄)
+const G1 = [0.5, 1.7], G2 = [-2.7, 0.4], G3 = [5.4, -0.25] // 습도 때 우산 쓰고 모이는 무리 중심
 const PLANS = {
+  // 뜨거운 장비 반대편(오른쪽 앞) 시원한 곳으로 피신해 부채질, 단말기 담당만 뜨거운 장비 단말기로 달려가 조작
   temperature: [
-    { act: 'fan', bubble: '💦' },
-    { act: 'work_fast', bubble: '❗' },
-    { act: 'fan', bubble: '🔥', go: { x: -2.5, z: 1.0, face: -Math.PI / 2, direct: true } }, // 뜨거운 장비에서 뒷걸음질
-    { act: 'worried', bubble: '🥵' },
-    { act: 'fan', bubble: '💦' },
-    { act: 'fan', bubble: '💦' },
-    { act: 'worried', bubble: '🔥' },
+    { act: 'fan', bubble: '💦', at: [3.0, 4.6], face: 'hot' },
+    { act: 'work_fast', bubble: '❗', at: [-3.78, 4.55], face: 'kiosk1' },
+    { act: 'fan', bubble: '🔥', at: [3.9, 3.7], face: 'hot' },
+    { act: 'worried', bubble: '🥵', at: [4.7, 4.3], face: 'hot' },
+    { act: 'fan', bubble: '💦', at: [5.5, 3.0], face: 'hot' },
+    { act: 'fan', bubble: '💦', at: [6.1, 2.1], face: 'hot' },
+    { act: 'worried', bubble: '🔥', at: [2.9, 0.4], face: 'hot' },
   ],
+  // 우산 쓰고 2~3명씩 웅덩이 없는 곳에 모여 웅크림
   humidity: [
-    { act: 'umbrella', bubble: '💧' }, { act: 'umbrella', bubble: '☔' }, { act: 'umbrella', bubble: '💧' },
-    { act: 'umbrella', bubble: '☔' }, { act: 'umbrella', bubble: '💧' }, { act: 'umbrella', bubble: '☔' },
-    { act: 'umbrella', bubble: '💧' },
+    { act: 'umbrella', bubble: '💧', at: [0.15, 1.55], face: G1 },
+    { act: 'umbrella', bubble: '☔', at: [5.1, -0.45], face: G3 },
+    { act: 'umbrella', bubble: '💧', at: [-3.1, 0.3], face: G2 },
+    { act: 'umbrella', bubble: '☔', at: [0.85, 1.85], face: G1 },
+    { act: 'umbrella', bubble: '💧', at: [5.75, -0.05], face: G3 },
+    { act: 'umbrella', bubble: '☔', at: [-2.45, 0.05], face: G2 },
+    { act: 'umbrella', bubble: '💧', at: [-2.5, 0.8], face: G2 },
   ],
-  gas: Array.from({ length: 7 }, (_, i) => ({ act: 'cover', bubble: i % 2 ? '😷' : '❗', go: 'slot', walk: 'cover' })),
-  air_quality: [
-    { act: 'cough', bubble: '콜록' }, { act: 'swat', bubble: '훠이!' }, { act: 'cough', bubble: '콜록' },
-    { act: 'swat', bubble: '훠이!' }, { act: 'cough', bubble: '콜록' }, { act: 'swat', bubble: '훠이!' },
-    { act: 'cough', bubble: '콜록' },
-  ],
+  // 입 막고 출입문 앞으로 대피
+  gas: [[4.4, -4.5], [5.2, -4.5], [6.0, -4.4], [4.4, -3.7], [5.2, -3.7], [6.0, -3.6], [5.2, -2.9]]
+    .map((at, i) => ({ act: 'cover', bubble: i % 2 ? '😷' : '❗', at, face: 'door', walk: 'cover' })),
+  // 천장 필터(FFU) 아래를 피해 앞쪽으로 나와 기침·먼지 휘젓기
+  air_quality: [[-2.8, 4.4], [-1.8, 5.0], [-0.8, 4.3], [0.2, 5.0], [1.2, 4.3], [2.2, 5.0], [-1.3, 3.5]]
+    .map((at, i) => (i % 2
+      ? { act: 'swat', bubble: '훠이!', at, face: 0.3 }
+      : { act: 'cough', bubble: '콜록', at, face: -0.3 })),
+  // 문에 가까운 3명이 문을 밀어 막고, 나머지는 차압계 앞에 모여 걱정
   pressure: [
-    { act: 'worried', bubble: '⚠️', face: 'door' },
-    { act: 'push', bubble: '끙!', go: 'push', pushIdx: 0 },
-    { act: 'worried', bubble: '⚠️', face: 'door' },
-    { act: 'worried', bubble: '😨', face: 'door' },
-    { act: 'push', bubble: '끙!', go: 'push', pushIdx: 1 },
-    { act: 'push', bubble: '끙!', go: 'push', pushIdx: 2 },
-    { act: 'worried', bubble: '😨', face: 'door' },
+    { act: 'worried', bubble: '⚠️', at: [5.9, -4.2], face: 'gauge' },
+    { act: 'push', bubble: '끙!', at: [4.0, -5.0], face: Math.PI },
+    { act: 'worried', bubble: '⚠️', at: [6.35, -3.5], face: 'gauge' },
+    { act: 'worried', bubble: '😨', at: [5.4, -3.6], face: 'gauge' },
+    { act: 'push', bubble: '끙!', at: [4.6, -4.95], face: Math.PI },
+    { act: 'push', bubble: '끙!', at: [5.2, -5.0], face: Math.PI },
+    { act: 'worried', bubble: '😨', at: [4.55, -3.8], face: 'gauge' },
   ],
 }
 
@@ -289,10 +260,12 @@ function bubbleTexture(text) {
   return tex
 }
 
-export function buildWorkers() {
+export function buildWorkers(nav) {
   const root = new THREE.Group()
   root.name = 'workers'
   const people = []
+  const V = (x, z) => new THREE.Vector2(x, z)
+  const toV = (pts) => pts.map(([x, z]) => V(x, z))
 
   function addPerson(w, extra) {
     const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, depthTest: false }))
@@ -311,7 +284,14 @@ export function buildWorkers() {
     w.root.position.set(s.x, 0, s.z)
     w.root.rotation.y = s.face
     root.add(w.root)
-    addPerson(w, { station: s, mode: 'work', atHome: true, phase: i * 1.3, slot: SLOTS[i] })
+    addPerson(w, { station: s, mode: 'work', phase: i * 1.3, target: [s.x, s.z] })
+  })
+
+  // 순회 경로: 루프 지점 사이를 길찾기로 이어 붙여 장비를 피함
+  const loopPts = []
+  LOOP.forEach((pt, i) => {
+    const next = LOOP[(i + 1) % LOOP.length]
+    loopPts.push(...nav.path(pt, next))
   })
 
   // 순회 작업자 + 웨이퍼 트레이
@@ -322,31 +302,12 @@ export function buildWorkers() {
   tray.add(rbox('worker_walker_tray_box', 0.4, 0.045, 0.32, new THREE.MeshStandardMaterial({ color: 0x3aa9ad, roughness: 0.35 }), 0, 0, 0, 0.02))
   tray.add(cyl('worker_walker_tray_wafer', 0.13, 0.13, 0.012, new THREE.MeshStandardMaterial({ color: 0x5fd0dc, metalness: 0.7, roughness: 0.2 }), 0, 0.03, 0, 32))
   walker.body.add(tray)
-  walker.root.position.set(NODES.n0[0], 0, NODES.n0[1])
+  walker.root.position.set(LOOP[0][0], 0, LOOP[0][1])
   root.add(walker.root)
-  addPerson(walker, { station: null, mode: 'loop', loopIdx: 1, phase: 9, slot: SLOTS[6], carrying: true, tray })
+  addPerson(walker, { station: null, mode: 'loop', loopIdx: 0, phase: 9, carrying: true, tray })
 
   let scenario = 'normal'
-
-  // ── 이동 경로 만들기 ──
-  const V = (x, z) => new THREE.Vector2(x, z)
-  function pathTo(p, target, targetNode, direct) {
-    const pos = p.root.position
-    if (direct) return [V(target[0], target[1])]
-    const pts = []
-    let startNode
-    if (p.station && p.atHome) {
-      // 제자리에서 출발: 경유지 → 통로 지점
-      pts.push(...p.station.entry)
-      startNode = p.station.node
-    } else {
-      startNode = nearestNode(pos.x, pos.z)
-    }
-    const nodes = route(startNode, targetNode)
-    pts.push(...nodes.map((k) => NODES[k]))
-    pts.push(target)
-    return pts.map(([x, z]) => V(x, z))
-  }
+  let lastMoved = 0
 
   function showBubble(p, text, holdSec = Infinity) {
     if (!text) { p.bubble.visible = false; return }
@@ -357,66 +318,49 @@ export function buildWorkers() {
     p.bubbleHideAt = holdSec
   }
 
+  function nearestLoopIdx(x, z) {
+    let best = 0, bd = Infinity
+    loopPts.forEach(([lx, lz], k) => {
+      const d = Math.hypot(lx - x, lz - z)
+      if (d < bd) { bd = d; best = k }
+    })
+    return best
+  }
+
   function setScenario(key) {
     if (key === scenario) return
     scenario = key
+    lastMoved = 0
     people.forEach((p, i) => {
       p.umbrella.visible = false
       p.umbrellaT = 0
+      const pos = [p.root.position.x, p.root.position.z]
+      let target
       if (key === 'normal' || !PLANS[key]) {
-        // 정상 복귀: 제자리(순회자는 가까운 루프 지점)로 돌아감
+        // 정상 복귀: 제자리(순회자는 가까운 순회 지점)로 걸어 돌아감
         p.act = null
         if (p.station) {
-          const s = p.station
-          if (p.atHome) {
-            // 제자리에서 행동하던 사람은 그 자리에서 바로 작업 재개
-            p.mode = 'work'
-            p.path = []
-            showBubble(p, '♪', 2.5)
-            return
-          }
-          const back = [...s.entry].reverse()
-          const pts = p.directHome
-            ? [[s.x, s.z]]
-            : [...route(nearestNode(p.root.position.x, p.root.position.z), s.node).map((k) => NODES[k]), ...back, [s.x, s.z]]
-          p.path = pts.map(([x, z]) => V(x, z))
+          target = [p.station.x, p.station.z]
         } else {
-          const k = nearestNode(p.root.position.x, p.root.position.z)
-          p.loopIdx = Math.max(0, LOOP.indexOf(k))
-          p.path = [V(...NODES[LOOP[p.loopIdx]])]
+          p.loopIdx = nearestLoopIdx(...pos)
+          target = loopPts[p.loopIdx]
         }
         p.mode = 'return'
         showBubble(p, '♪', 2.5)
-        return
-      }
-
-      const plan = PLANS[key][i]
-      p.act = plan.act
-      p.actWalk = plan.walk || 'swing'
-      p.actFace = plan.face ?? null
-      showBubble(p, plan.bubble)
-      const go = plan.go || 'stay'
-      if (go === 'stay') {
-        // 그 자리(이동 중이었으면 지금 위치)에서 바로 행동. atHome은 제자리였는지 그대로 유지
-        p.path = []
-        p.mode = 'act'
-        return
-      }
-      const fromHome = p.atHome
-      if (go === 'slot') {
-        p.path = pathTo(p, p.slot, 'hub')
-        p.actFace = Math.PI
-      } else if (go === 'push') {
-        p.path = pathTo(p, PUSH_SPOTS[plan.pushIdx], 'hub')
-        p.actFace = Math.PI
       } else {
-        p.path = pathTo(p, [go.x, go.z], nearestNode(go.x, go.z), go.direct && fromHome)
-        p.actFace = go.face ?? null
+        const plan = PLANS[key][i]
+        p.act = plan.act
+        p.actWalk = plan.walk || 'swing'
+        p.actFace = plan.face ?? null
+        target = plan.at
+        p.mode = 'move'
+        showBubble(p, plan.bubble)
       }
-      p.mode = 'move'
-      p.atHome = false
-      // 제자리에서 바로 옆으로 비켜선 경우(direct)는 정상 복귀 때도 곧장 돌아오게
-      p.directHome = go.direct && fromHome
+      p.path = toV(nav.path(pos, target))
+      // '이동함' = 직전 목표 자리와 다른 곳으로 배정됨 (순회자는 늘 걷고 있으므로 항상 이동으로 침)
+      const prev = p.target
+      if (!prev || Math.hypot(target[0] - prev[0], target[1] - prev[1]) > 0.3) lastMoved++
+      p.target = target
     })
   }
 
@@ -434,6 +378,11 @@ export function buildWorkers() {
       p.root.position.z = target.y
       p.path.shift()
       return p.path.length === 0
+    }
+    // 마지막 지점에 거의 다 왔으면 도착으로 침 (옆 사람에게 살짝 밀려 정확히 못 닿아도 멈추지 않게)
+    if (p.path.length === 1 && dist < ARRIVE) {
+      p.path.shift()
+      return true
     }
     tmp.multiplyScalar(move / dist)
     p.root.position.x += tmp.x
@@ -599,9 +548,51 @@ export function buildWorkers() {
   }
 
   function faceToward(p, dt) {
-    let target = p.actFace
-    if (target === 'door') target = heading(DOOR[0] - p.root.position.x, DOOR[1] - p.root.position.z)
-    if (typeof target === 'number') p.root.rotation.y = lerpAngle(p.root.rotation.y, target, Math.min(1, dt * 5))
+    let f = p.actFace
+    if (typeof f === 'string') f = LOOK[f]
+    if (Array.isArray(f)) f = heading(f[0] - p.root.position.x, f[1] - p.root.position.z)
+    if (typeof f === 'number') p.root.rotation.y = lerpAngle(p.root.rotation.y, f, Math.min(1, dt * 5))
+  }
+
+  // 서로 겹치지 않게 밀어내기 + 걷다가 장비에 파고들면 밖으로 밀어내기
+  // 장비 앞에서 작업 중인 사람은 고정, 위험 대형 자리에 선 사람은 살짝만 밀림(걷는 사람이 비집고 지나갈 수 있게)
+  const SPACING = 0.58 // 서 있는 사람끼리 간격
+  const PASS_GAP = 0.42 // 걷는 사람이 지나갈 때 간격
+  const fixed = (p) => p.mode === 'work' || p.mode === 'act'
+  const weight = (p) => (p.mode === 'work' ? 0 : p.mode === 'act' ? 0.2 : 1)
+  function separate() {
+    for (let a = 0; a < people.length; a++) {
+      for (let b = a + 1; b < people.length; b++) {
+        const A = people[a].root.position, B = people[b].root.position
+        const dx = B.x - A.x, dz = B.z - A.z
+        const d = Math.hypot(dx, dz)
+        if (d >= SPACING || d < 1e-4) continue
+        const ka = weight(people[a]), kb = weight(people[b])
+        if (ka + kb === 0) continue // 둘 다 장비 앞에서 작업 중
+        // 걷는 사람이 끼면 간격 기준을 줄여 살짝 스치며 비집고 지나갈 수 있게
+        const gap = fixed(people[a]) && fixed(people[b]) ? SPACING : PASS_GAP
+        if (d >= gap) continue
+        const push = gap - d
+        const wa = ka / (ka + kb)
+        const wb = kb / (ka + kb)
+        A.x -= (dx / d) * push * wa; A.z -= (dz / d) * push * wa
+        B.x += (dx / d) * push * wb; B.z += (dz / d) * push * wb
+      }
+    }
+    const pad = 0.12
+    for (const p of people) {
+      if (fixed(p)) continue
+      const P = p.root.position
+      const o = nav.insideObstacle(P.x, P.z, pad)
+      if (!o) continue
+      const [x0, z0, x1, z1] = o.r
+      const gaps = [P.x - (x0 - pad), (x1 + pad) - P.x, P.z - (z0 - pad), (z1 + pad) - P.z]
+      const m = Math.min(...gaps)
+      if (m === gaps[0]) P.x = x0 - pad
+      else if (m === gaps[1]) P.x = x1 + pad
+      else if (m === gaps[2]) P.z = z0 - pad
+      else P.z = z1 + pad
+    }
   }
 
   function update(dt, t) {
@@ -613,8 +604,8 @@ export function buildWorkers() {
       if (p.mode === 'work') {
         poseAct(p, t, dt, 'work')
       } else if (p.mode === 'loop') {
-        if (!p.path.length) p.path = [V(...NODES[LOOP[p.loopIdx]])]
-        if (step(p, dt)) p.loopIdx = (p.loopIdx + 1) % LOOP.length
+        if (!p.path.length) p.path = [V(...loopPts[p.loopIdx])]
+        if (step(p, dt)) p.loopIdx = (p.loopIdx + 1) % loopPts.length
         poseWalk(p, dt, 'carry')
       } else if (p.mode === 'move') {
         // 위험 상황으로 이동: 평소보다 빠른 종종걸음
@@ -627,18 +618,17 @@ export function buildWorkers() {
         if (step(p, dt)) {
           if (p.station) {
             p.mode = 'work'
-            p.atHome = true
-            p.directHome = false
             p.root.rotation.y = p.station.face
           } else {
             p.mode = 'loop'
-            p.loopIdx = (p.loopIdx + 1) % LOOP.length
+            p.loopIdx = (p.loopIdx + 1) % loopPts.length
           }
         } else {
           poseWalk(p, dt, p.station ? 'swing' : 'carry')
         }
       }
     }
+    separate()
   }
 
   function summary() {
@@ -648,7 +638,16 @@ export function buildWorkers() {
       modes[p.mode] = (modes[p.mode] || 0) + 1
       if (p.mode === 'act') acts[p.act] = (acts[p.act] || 0) + 1
     }
-    return { modes, acts }
+    // 겹침(0.4 미만으로 붙은 쌍) · 장비 안에 들어간 사람 수 — 자가진단용
+    let overlaps = 0
+    for (let a = 0; a < people.length; a++) {
+      for (let b = a + 1; b < people.length; b++) {
+        const A = people[a].root.position, B = people[b].root.position
+        if (Math.hypot(A.x - B.x, A.z - B.z) < 0.4) overlaps++
+      }
+    }
+    const inObstacle = people.filter((p) => nav.insideObstacle(p.root.position.x, p.root.position.z, 0)).length
+    return { modes, acts, moved: lastMoved, overlaps, inObstacle }
   }
 
   return { root, update, setScenario, summary }

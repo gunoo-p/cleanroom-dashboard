@@ -9,6 +9,7 @@ import * as THREE from 'three'
 import { buildRoom, ROOM } from './room.js'
 import { buildEquipment, curtainMaterial, flowCurtains } from './equipment.js'
 import { buildWorkers } from './workers.js'
+import { createNav, obstaclesFrom } from './nav.js'
 import { buildEffects } from './effects.js'
 import { setScreensAlarm, resetScreens } from './parts.js'
 
@@ -27,8 +28,11 @@ export function buildCleanroom() {
   const root = new THREE.Group()
   root.name = 'cleanroom'
   root.add(buildRoom())
-  root.add(buildEquipment())
-  const workers = buildWorkers()
+  const equipment = buildEquipment()
+  root.add(equipment)
+  // 장비 배치에서 걸을 수 없는 영역을 자동 계산해 작업자 길찾기에 사용
+  const nav = createNav(obstaclesFrom(equipment))
+  const workers = buildWorkers(nav)
   root.add(workers.root)
 
   // 장비 상태등 (*_lamp)

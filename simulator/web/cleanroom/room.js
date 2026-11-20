@@ -91,9 +91,16 @@ export function buildRoom() {
   root.add(backWall)
 
   // 벽이 만나는 모서리 기둥
-  root.add(cyl('wall_corner', wallT / 2, wallT / 2, wallH, MAT.white, minX + wallT / 2, wallH / 2, minZ + wallT / 2))
-  root.add(new THREE.Mesh(new THREE.SphereGeometry(wallT / 2 + 0.01, 16, 12), MAT.white)
-    .translateX(minX + wallT / 2).translateY(wallH).translateZ(minZ + wallT / 2))
+  // (바닥을 축으로 하는 그룹 — 차압 때 벽과 함께 안쪽으로 기울어짐)
+  const corner = new THREE.Group()
+  corner.name = 'wall_corner_group'
+  corner.position.set(minX + wallT / 2, 0, minZ + wallT / 2)
+  corner.add(cyl('wall_corner', wallT / 2, wallT / 2, wallH, MAT.white, 0, wallH / 2, 0))
+  const cap = new THREE.Mesh(new THREE.SphereGeometry(wallT / 2 + 0.01, 16, 12), MAT.white)
+  cap.name = 'wall_corner_cap'
+  cap.position.y = wallH
+  corner.add(cap)
+  root.add(corner)
 
   // ── 출입문 (차압 시나리오: 경첩 축으로 방 안쪽으로 열림) ──
   root.add(buildDoor())

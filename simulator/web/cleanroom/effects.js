@@ -286,6 +286,124 @@ function buildSiren(fx) {
   }
 }
 
+// ── 차압 위험: 방이 쪼그라드는 느낌 ──────────────
+// 바깥 압력이 더 세서 방을 꾹꾹 누르는 만화 같은 표현:
+//   벽 윗부분이 안쪽으로 기울고(모서리 기둥·문·벽 계기도 함께), 천장 FFU가 내려앉고,
+//   벽 위 바깥쪽 큰 화살표가 방 안쪽으로 꾹꾹 민다. 압력이 들어올 때마다 '꾹' 눌렸다 조금 풀리기를 반복.
+const X_AXIS = new THREE.Vector3(1, 0, 0)
+
+function buildSqueeze(root, fx, backWallItems) {
+  const wallLeft = root.getObjectByName('wall_left')
+  const wallBack = root.getObjectByName('wall_back')
+  const corner = root.getObjectByName('wall_corner_group')
+  const door = root.getObjectByName('door')
+  const save = (o) => o && { o, q: o.quaternion.clone(), p: o.position.clone() }
+  const walls = [save(wallLeft), save(wallBack)].filter(Boolean)
+  const cornerS = save(corner)
+  const doorS = save(door)
+  const backItems = backWallItems.map(save).filter(Boolean)
+  const ffus = []
+  root.traverse((o) => { if (/^ffu_\d+$/.test(o.name)) ffus.push(save(o)) })
+
+  // 모서리 기둥은 방 안쪽 대각선(+x,+z) 방향으로 기울임
+  const cornerAxis = new THREE.Vector3(1, 0, -1).normalize()
+
+  // 벽 위 바깥쪽에서 안쪽을 향해 미는 큰 화살표 (뒷벽 3개 + 왼쪽 벽 3개)
+  const arrowMat = new THREE.MeshStandardMaterial({ color: 0xff4d5e, roughness: 0.4, emissive: 0xff1f35, emissiveIntensity: 0.4, transparent: true, opacity: 0 })
+  const pushers = []
+  const makeArrow = () => {
+    const a = new THREE.Group()
+    const head = new THREE.Mesh(new THREE.ConeGeometry(0.32, 0.55, 20), arrowMat)
+    head.rotation.x = Math.PI / 2 // +z를 가리킴
+    head.position.z = 0.45
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.7, 14), arrowMat)
+    shaft.rotation.x = Math.PI / 2
+    head.userData.noShadow = shaft.userData.noShadow = true
+    a.add(head, shaft)
+    a.visible = false
+    fx.add(a)
+    return a
+  }
+  const zBack = ROOM.minZ - 0.9
+  const xLeft = ROOM.minX - 0.9
+  for (const x of [-4.5, -0.5, 3.5]) {
+    const a = makeArrow()
+    a.userData.base = new THREE.Vector3(x, 4.9, zBack)
+    a.userData.dir = new THREE.Vector3(0, -0.35, 1).normalize() // 안쪽·약간 아래로
+    pushers.push(a)
+  }
+  for (const z of [-3.0, 0.5, 4.0]) {
+    const a = makeArrow()
+    a.userData.base = new THREE.Vector3(xLeft, 4.9, z)
+    a.userData.dir = new THREE.Vector3(1, -0.35, 0).normalize()
+    pushers.push(a)
+  }
+  for (const a of pushers) a.lookAt(a.position.clone().add(a.userData.dir)) // 화살표가 dir 방향을 보게
+
+  const qTilt = new THREE.Quaternion()
+  const qKnock = new THREE.Quaternion()
+  const v = new THREE.Vector3()
+  let level = 0
+  let squeeze = 0
+
+  // 바닥(y=0) 뒷벽 면을 축으로 x축 회전: 물체가 벽과 함께 기울어지게 위치·방향을 옮김
+  function tiltAboutBackWall(s, angle) {
+    qTilt.setFromAxisAngle(X_AXIS, angle)
+    v.copy(s.p)
+    const pivotZ = ROOM.minZ + ROOM.wallT / 2 // 뒷벽 그룹의 회전 축(두께 가운데, 바닥)
+    v.z -= pivotZ
+    v.applyQuaternion(qTilt)
+    v.z += pivotZ
+    s.o.position.copy(v)
+    s.o.quaternion.copy(qTilt).multiply(s.q)
+  }
+
+  return {
+    update(dt, t, on) {
+      level += ((on ? 1 : 0) - level) * Math.min(1, dt * (on ? 3 : 6))
+      if (level < 0.002) level = 0
+      // 1.6초마다 '꾹'(빠르게 눌림) → 천천히 일부 풀림
+      const beat = (t % 1.6) / 1.6
+      const press = beat < 0.15 ? beat / 0.15 : 1 - ((beat - 0.15) / 0.85) * 0.45
+      squeeze = level * press
+      const tilt = 0.12 * squeeze
+
+      // 벽: 각 벽 그룹의 '안쪽 면'(로컬 +z) 방향으로 윗부분이 기울어짐 (바닥이 축)
+      for (const s of walls) {
+        qTilt.setFromAxisAngle(X_AXIS, tilt)
+        s.o.quaternion.copy(s.q).multiply(qTilt)
+      }
+      if (cornerS) {
+        qTilt.setFromAxisAngle(cornerAxis, tilt)
+        cornerS.o.quaternion.copy(qTilt).multiply(cornerS.q)
+      }
+      // 뒷벽에 붙은 계기들도 벽과 함께
+      for (const s of backItems) tiltAboutBackWall(s, tilt)
+      // 문: 벽과 함께 기울고 + 안쪽으로 덜컹덜컹 (열리지는 않음)
+      if (doorS) {
+        tiltAboutBackWall(doorS, tilt)
+        const knock = level * (Math.max(0, Math.sin(t * 7)) ** 6 * 0.06 + Math.sin(t * 40) * 0.006)
+        qKnock.setFromAxisAngle(new THREE.Vector3(0, 1, 0), -knock)
+        doorS.o.quaternion.multiply(qKnock)
+      }
+      // 천장 FFU가 눌려 내려앉음
+      for (const s of ffus) s.o.position.y = s.p.y - 0.55 * squeeze
+
+      // 바깥 화살표: 눌릴 때 안쪽으로 쑥 들어왔다 물러남
+      arrowMat.opacity = Math.min(1, level * 1.2)
+      for (const a of pushers) {
+        a.visible = level > 0.01
+        a.position.copy(a.userData.base).addScaledVector(a.userData.dir, -0.5 + press * 0.9)
+        a.scale.setScalar(0.9 + press * 0.25)
+      }
+    },
+    squeeze: () => squeeze,
+    level: () => level,
+    // 공기질 FFU 떨림 등 다른 효과가 기준 위치를 쓰도록
+    ffuOffsetY: () => -0.55 * squeeze,
+  }
+}
+
 export function buildEffects(root) {
   const fx = new THREE.Group()
   fx.name = 'effects'
@@ -364,6 +482,9 @@ export function buildEffects(root) {
     x: 0.25, y: 3.0, z: WALL_Z + 0.04, r: 0.36,
   })
   fx.add(pGauge.group, hGauge.group)
+
+  // 차압 위험: 방이 쪼그라듦 (뒷벽에 붙은 계기도 함께 기울어짐)
+  const squeeze = buildSqueeze(root, fx, [pGauge.group, hGauge.group])
 
   // 차압: 바깥 공기 유입 화살표
   const arrowMat = new THREE.MeshStandardMaterial({ color: 0xff5f6d, roughness: 0.4, emissive: 0xff2d3d, emissiveIntensity: 0.35, transparent: true, opacity: 0.9 })
@@ -534,11 +655,8 @@ export function buildEffects(root) {
       const s = 0.8 + Math.sin(a.age * 12) * 0.08
       a.g.scale.set(s, s, 1)
     }
-    if (door) {
-      // 덜컹덜컹: 안쪽으로 툭툭 밀림 (열리지는 않음)
-      const knock = scenario === 'pressure' ? Math.max(0, Math.sin(t * 7)) ** 6 * 0.06 + Math.sin(t * 40) * 0.006 : 0
-      door.rotation.y = -knock
-    }
+    // 문 덜컹·벽 기울기·FFU 내려앉기는 squeeze가 처리
+    squeeze.update(dt, t, scenario === 'pressure')
 
     // 계기 바늘: 목표값으로 부드럽게 + 작은 흔들림
     const pTarget = scenario === 'pressure' ? -10 : 15
@@ -563,6 +681,7 @@ export function buildEffects(root) {
       humidityGauge: +hGauge.get().toFixed(1),
       doorAngle: door ? +door.rotation.y.toFixed(3) : 0,
       siren: +siren.level().toFixed(2),
+      squeeze: +squeeze.squeeze().toFixed(2),
     }),
   }
 }
