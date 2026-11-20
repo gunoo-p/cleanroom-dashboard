@@ -1,10 +1,12 @@
 // 시뮬레이터 화면: 버튼·카드·로그 + 파이썬(simulator_3d.py) 연결.
 //
 // 파이썬 → 화면: window.sim.onData / onLog / onScenario 를 evaluate_js로 호출
-// 화면 → 파이썬: pywebview.api.toggle() / set_scenario(key)
+// 화면 → 파이썬: pywebview.api.toggle() / set_scenarios([key, ...])
+// 위험 버튼은 켜고 끄는 방식(여러 개 동시 선택), '정상'은 전부 끔.
 // pywebview 없이 브라우저로 열면 '미리보기 모드'(서버 전송 없이 가짜 값만 표시)로 동작한다.
 import { createScene } from './scene.js'
 import { createSensorCards } from './sensorCards.js'
+import { toKeys, sortByPriority } from './scenarios.js'
 
 const $ = (id) => document.getElementById(id)
 
@@ -36,7 +38,7 @@ const PREVIEW_CONFIG = {
 const ui = {
   connected: false, // 파이썬(또는 미리보기) 연결 + 화면 구성 완료
   running: false,
-  scenario: 'normal',
+  scenarios: [], // 켜진 위험 목록 (우선순위 순). 비어 있으면 정상
   preview: false,
   labels: {},
 }
@@ -74,21 +76,26 @@ function buildUI(cfg) {
 
   cards = createSensorCards($('cards'))
 
-  renderScenario(ui.scenario)
+  renderScenarios(ui.scenarios)
 }
 
-function renderScenario(key) {
-  ui.scenario = key
+// 켜진 위험 목록을 화면에 반영 (버튼·배지·카드 강조·3D)
+function renderScenarios(arg) {
+  const keys = toKeys(arg)
+  ui.scenarios = keys
   document.querySelectorAll('.scenario-btn').forEach((b) => {
-    b.classList.toggle('active', b.dataset.scenario === key)
+    const k = b.dataset.scenario
+    b.classList.toggle('active', k === 'normal' ? keys.length === 0 : keys.includes(k))
   })
-  cards?.highlight(key)
+  cards?.highlight(keys)
   const badge = $('status-badge')
-  const danger = key !== 'normal'
-  badge.textContent = danger ? `⚠ ${ui.labels[key] ?? key}` : '정상 운전'
+  const danger = keys.length > 0
+  // 예: '⚠ 온도 · 가스 위험'
+  const names = keys.map((k) => (ui.labels[k] ?? k).replace(/\s*위험$/, ''))
+  badge.textContent = danger ? `⚠ ${names.join(' · ')} 위험` : '정상 운전'
   badge.classList.toggle('danger', danger)
-  $('alarm-vignette').classList.toggle('on', key === 'temperature') // 온도 위험: 화면 테두리 사이렌
-  scene3d.setScenario(key)
+  $('alarm-vignette').classList.toggle('on', keys.includes('temperature')) // 온도 위험: 화면 테두리 사이렌
+  scene3d.setScenarios(keys)
 }
 
 function renderRunning(running) {
@@ -109,16 +116,23 @@ window.sim = {
   onLog({ msg, tag }) {
     addLog(msg, tag)
   },
-  onScenario(key) {
-    renderScenario(key)
+  // 파이썬이 확정한 켜진 위험 목록. { keys, seq } — 더 최근에 누른 버튼이 있으면(오래된 응답) 무시
+  onScenario(arg) {
+    if (arg && !Array.isArray(arg) && typeof arg === 'object') {
+      if (arg.seq != null && arg.seq < scenarioSeq) return
+      return renderScenarios(arg.keys)
+    }
+    renderScenarios(arg)
   },
   // 자가진단(--selftest)·디버그용
   debug: {
     ready: () => ui.connected && scene3d.isReady(),
+    // 자가진단용: 버튼을 누르는 것과 같은 경로로 켜진 위험 목록을 한 번에 지정
+    select: (keys) => applyScenarios(keys),
     info: () => ({
       ...scene3d.info(),
       connected: ui.connected,
-      uiScenario: ui.scenario,
+      uiScenarios: ui.scenarios,
       running: ui.running,
       preview: ui.preview,
       badge: $('status-badge').textContent,
@@ -134,9 +148,22 @@ window.sim = {
 // ── 버튼 ─────────────────────────────────────
 let api = null
 
+// 위험 버튼: 켜고 끄기(여러 개 가능) / 정상: 전부 끄기
 async function onScenarioClick(key) {
-  renderScenario(key) // 화면은 바로 바꾸고, 파이썬도 같은 값으로 맞춘다.
-  await api?.set_scenario(key)
+  if (key === 'normal') return applyScenarios([])
+  const set = new Set(ui.scenarios)
+  if (set.has(key)) set.delete(key)
+  else set.add(key)
+  return applyScenarios([...set])
+}
+
+// 버튼을 누를 때마다 번호를 붙여, 빠르게 연달아 눌러도 마지막 상태가 이기게 한다.
+let scenarioSeq = 0
+async function applyScenarios(keys) {
+  const list = sortByPriority(keys)
+  const seq = ++scenarioSeq
+  renderScenarios(list) // 화면은 바로 바꾸고, 파이썬도 같은 값으로 맞춘다.
+  await api?.set_scenarios(list, seq)
 }
 
 $('run-btn').addEventListener('click', async () => {
@@ -154,16 +181,17 @@ function previewApi() {
   const tick = () => {
     const values = {}
     for (const k of CARD_KEYS) {
-      const b = ui.scenario === k ? danger[k] : base[k]
+      const b = ui.scenarios.includes(k) ? danger[k] : base[k]
       values[k] = Math.round((b + (Math.random() - 0.5) * range[k]) * 10) / 10
     }
     window.sim.onData({ values, ok: true, sent: ++sent, failed: 0 })
   }
   return {
     get_config: async () => PREVIEW_CONFIG,
-    set_scenario: async (key) => {
-      window.sim.onLog({ msg: `시나리오 전환 → ${ui.labels[key] ?? key}`, tag: 'info' })
-      window.sim.onScenario(key)
+    set_scenarios: async (keys) => {
+      const names = keys.map((k) => ui.labels[k] ?? k)
+      window.sim.onLog({ msg: `시나리오 전환 → ${names.length ? names.join(' + ') : '정상'}`, tag: 'info' })
+      window.sim.onScenario(keys)
     },
     toggle: async () => {
       if (timer) {

@@ -7,6 +7,7 @@
 //   정상 복귀: 제자리로 돌아가 작업 재개 (♪ 말풍선)
 import * as THREE from 'three'
 import { COLOR, MAT, rbox, cyl } from './parts.js'
+import { sortByPriority } from '../scenarios.js'
 
 // 둥글둥글한 캐릭터용 재질 (살짝 크림빛 흰색 + 부드러운 광택)
 const SUIT = new THREE.MeshStandardMaterial({ color: 0xfbfcfd, roughness: 0.62 })
@@ -224,6 +225,38 @@ const PLANS = {
   ],
 }
 
+// ── 여러 위험이 동시에 켜졌을 때 대형 조합 ─────────
+// 우선순위: 가스 > 차압 > 온도 > 공기질 > 습도 (scenarios.js)
+//   가스 포함        → 7명 모두 입 막고 문 앞 대피 (대피와 부딪히는 차압 '문 밀기'는 뺌)
+//   차압 포함(가스X) → 3명은 문 밀기, 나머지는 다음 우선 상황의 대형 (없으면 차압계 앞)
+//   그 밖            → 가장 우선인 상황의 대형 + 하위 상황 동작 덧붙이기
+//     습도: 한 손만 쓰는 동작(부채질·기침)이면 왼손에 우산 / 공기질: 입을 막고 있지 않으면 가끔 콜록
+//   말풍선은 켜진 상황들의 아이콘이 번갈아 뜸
+const UMBRELLA_OK = ['fan', 'cough'] // 오른손만 쓰는 동작 → 왼손으로 우산을 들 수 있음
+const COUGH_SKIP = ['cough', 'swat', 'cover'] // 이미 기침·먼지 쫓기·입 막기 중이면 덧붙이지 않음
+// 대형을 따르지 않는(덧붙이기·뺀) 상황은 그 상황을 나타내는 대표 아이콘으로 말풍선에 표시
+const SCENARIO_ICON = { gas: '😷', pressure: '⚠️', temperature: '🔥', air_quality: '콜록', humidity: '💧' }
+function composePlan(keys, i) {
+  const sorted = sortByPriority(keys)
+  let baseKey
+  if (sorted.includes('gas')) {
+    baseKey = 'gas'
+  } else if (sorted.includes('pressure')) {
+    const next = sorted.find((k) => k !== 'pressure')
+    baseKey = PLANS.pressure[i].act === 'push' || !next ? 'pressure' : next
+  } else {
+    baseKey = sorted[0]
+  }
+  const base = PLANS[baseKey][i]
+  const bubbles = [...new Set([base.bubble, ...sorted.filter((k) => k !== baseKey).map((k) => SCENARIO_ICON[k])])]
+  return {
+    ...base,
+    umbrella: sorted.includes('humidity') && UMBRELLA_OK.includes(base.act),
+    cough: sorted.includes('air_quality') && !COUGH_SKIP.includes(base.act),
+    bubbles,
+  }
+}
+
 // ── 말풍선 ────────────────────────────────────
 const bubbleCache = new Map()
 function bubbleTexture(text) {
@@ -306,7 +339,7 @@ export function buildWorkers(nav) {
   root.add(walker.root)
   addPerson(walker, { station: null, mode: 'loop', loopIdx: 0, phase: 9, carrying: true, tray })
 
-  let scenario = 'normal'
+  let current = '' // 켜진 위험 목록을 문자열로 (같은 조합이면 다시 배치하지 않음)
   let lastMoved = 0
 
   function showBubble(p, text, holdSec = Infinity) {
@@ -327,16 +360,22 @@ export function buildWorkers(nav) {
     return best
   }
 
-  function setScenario(key) {
-    if (key === scenario) return
-    scenario = key
+  // keys: 켜진 위험 목록 (여러 개 가능, 빈 목록 = 정상)
+  function setScenarios(keys) {
+    keys = sortByPriority(keys)
+    const sig = keys.join(',')
+    if (sig === current) return
+    current = sig
     lastMoved = 0
     people.forEach((p, i) => {
       p.umbrella.visible = false
       p.umbrellaT = 0
+      p.umbrellaOverlay = false
+      p.coughOverlay = false
+      p.bubbles = []
       const pos = [p.root.position.x, p.root.position.z]
       let target
-      if (key === 'normal' || !PLANS[key]) {
+      if (keys.length === 0) {
         // 정상 복귀: 제자리(순회자는 가까운 순회 지점)로 걸어 돌아감
         p.act = null
         if (p.station) {
@@ -348,13 +387,18 @@ export function buildWorkers(nav) {
         p.mode = 'return'
         showBubble(p, '♪', 2.5)
       } else {
-        const plan = PLANS[key][i]
+        const plan = composePlan(keys, i)
         p.act = plan.act
         p.actWalk = plan.walk || 'swing'
         p.actFace = plan.face ?? null
+        p.umbrellaOverlay = plan.umbrella
+        p.coughOverlay = plan.cough
+        p.bubbles = plan.bubbles
+        p.bubbleIdx = 0
+        p.bubbleCycleT = 0
         target = plan.at
         p.mode = 'move'
-        showBubble(p, plan.bubble)
+        showBubble(p, plan.bubbles[0])
       }
       p.path = toV(nav.path(pos, target))
       // '이동함' = 직전 목표 자리와 다른 곳으로 배정됨 (순회자는 늘 걷고 있으므로 항상 이동으로 침)
@@ -467,6 +511,7 @@ export function buildWorkers(nav) {
         p.umbrellaT = Math.min(1, p.umbrellaT + dt * 4)
         const pop = p.umbrellaT < 1 ? Math.sin(p.umbrellaT * Math.PI * 0.75) / Math.sin(Math.PI * 0.75) : 1
         p.umbrella.visible = true
+        p.umbrella.position.x = 0.2 // 오른손
         p.umbrella.scale.setScalar(Math.max(0.01, pop))
         R.rotation.set(-1.25, 0, 0.1)
         L.rotation.set(-0.6, 0, -0.5)
@@ -521,6 +566,26 @@ export function buildWorkers(nav) {
         p.head.rotation.set(-0.05, Math.sin(t * 0.8 + ph) * 0.55, 0)
       }
     }
+
+    // ── 하위 상황 동작 덧붙이기 (여러 위험 동시) ──
+    if (p.umbrellaOverlay && UMBRELLA_OK.includes(act)) {
+      // 습도: 오른손은 하던 동작, 왼손으로 우산
+      p.umbrellaT = Math.min(1, p.umbrellaT + dt * 4)
+      const pop = p.umbrellaT < 1 ? Math.sin(p.umbrellaT * Math.PI * 0.75) / Math.sin(Math.PI * 0.75) : 1
+      p.umbrella.visible = true
+      p.umbrella.position.x = -0.2 // 왼손
+      p.umbrella.scale.setScalar(Math.max(0.01, pop))
+      L.rotation.set(-1.25, 0, -0.1)
+    }
+    if (p.coughOverlay) {
+      // 공기질: 하던 동작 중 2.6초마다 '콜록'
+      const c = (t + ph * 1.7) % 2.6
+      if (c < 0.5) {
+        const hit = Math.abs(Math.sin(c * Math.PI * 6))
+        p.body.rotation.x += hit * 0.25
+        p.head.rotation.x += hit * 0.3
+      }
+    }
   }
 
   // 2~5초마다 눈 깜빡임
@@ -538,6 +603,17 @@ export function buildWorkers(nav) {
   // 말풍선: 나타날 때 '퐁' 커졌다 돌아오고, 떠 있는 동안 둥실둥실
   function updateBubble(p, dt, t) {
     if (!p.bubble.visible) return
+    // 켜진 위험이 여러 개면 아이콘을 1.6초마다 번갈아 (바뀔 때 다시 '퐁')
+    if (p.bubbles?.length > 1) {
+      p.bubbleCycleT += dt
+      if (p.bubbleCycleT > 1.6) {
+        p.bubbleCycleT = 0
+        p.bubbleIdx = (p.bubbleIdx + 1) % p.bubbles.length
+        p.bubble.material.map = bubbleTexture(p.bubbles[p.bubbleIdx])
+        p.bubble.material.needsUpdate = true
+        p.bubbleT = 0
+      }
+    }
     p.bubbleT += dt
     if (p.bubbleT > p.bubbleHideAt) { p.bubble.visible = false; return }
     const k = Math.min(1, p.bubbleT / 0.35)
@@ -647,8 +723,11 @@ export function buildWorkers(nav) {
       }
     }
     const inObstacle = people.filter((p) => nav.insideObstacle(p.root.position.x, p.root.position.z, 0)).length
-    return { modes, acts, moved: lastMoved, overlaps, inObstacle }
+    const umbrellas = people.filter((p) => p.umbrella.visible).length
+    const coughing = people.filter((p) => p.coughOverlay && p.mode === 'act').length
+    const bubbleCounts = people.map((p) => (p.bubbles || []).length) // 번갈아 뜨는 말풍선 아이콘 수
+    return { modes, acts, moved: lastMoved, overlaps, inObstacle, umbrellas, coughing, bubbleCounts }
   }
 
-  return { root, update, setScenario, summary }
+  return { root, update, setScenarios, setScenario: (k) => setScenarios(k === 'normal' ? [] : [k]), summary }
 }

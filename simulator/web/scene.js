@@ -9,6 +9,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
 import { buildCleanroom } from './cleanroom/index.js'
+import { toKeys, primaryOf } from './scenarios.js'
 
 export const SCENARIO_KEYS = ['normal', 'temperature', 'humidity', 'gas', 'air_quality', 'pressure']
 
@@ -284,12 +285,12 @@ export function createScene(canvas, container, { onLog = () => {} } = {}) {
     }
     glowMeshes = []
   }
+  // 발광 부품마다 자기 시나리오 색으로 깜빡임 (여러 위험이 켜지면 부품별로 다른 색)
   function updateGlow(t) {
-    const p = PRESETS[state.scenario]
-    if (!p.glow) return
+    if (!glowMeshes.length) return
     const k = 0.5 + 0.5 * Math.sin(t * 6)
-    tmpColor.setHex(p.glow)
     for (const mesh of glowMeshes) {
+      tmpColor.setHex(mesh.userData.glowColor)
       for (const m of materialsOf(mesh)) {
         if (!m.emissive) continue
         m.emissive.copy(tmpColor)
@@ -340,22 +341,31 @@ export function createScene(canvas, container, { onLog = () => {} } = {}) {
     return state.clips.find((c) => norm(c.name).includes(k)) || null
   }
 
-  // ── 시나리오 전환 ────────────────────────────
-  function applyScenario(key) {
-    const p = PRESETS[key] || PRESETS.normal
-    state.scenario = PRESETS[key] ? key : 'normal'
+  // ── 시나리오 전환 (여러 위험 동시 가능) ─────────
+  // 하나만 고를 수 있는 것(바닥 입자 종류·안개 색·애니메이션)은 우선순위가 가장 높은 상황(primary) 기준,
+  // 안개 짙기는 켜진 상황 중 가장 짙은 값, 부품 발광은 상황별 색을 합친다(같은 부품은 우선 상황 색).
+  function applyScenarios(keys) {
+    state.scenarios = keys
+    state.scenario = primaryOf(keys)
+    const p = PRESETS[state.scenario]
 
     pMat.color.setHex(p.color)
     setParticleMode(p.particle)
     scene.fog.color.setHex(p.fogColor)
-    scene.fog.density = p.fog
+    scene.fog.density = Math.max(0, ...keys.map((k) => PRESETS[k].fog))
     scene.background.setHex(BG).lerp(new THREE.Color(p.fogColor), 0.012) // 위험 시 배경에 살짝만 색이 돌게 (선형 색공간이라 작은 값도 꽤 밝아짐)
-    beacon.visible = p.beacon
+    beacon.visible = keys.some((k) => PRESETS[k].beacon)
 
     resetGlow()
-    if (p.glow) {
-      glowMeshes = state.targets[state.scenario]?.meshes || []
-      glowMeshes.forEach(prepareGlow)
+    const glowSet = new Map()
+    // 우선순위 낮은 것부터 칠하고 높은 것이 덮어쓰게 (keys는 우선순위 순)
+    for (const k of [...keys].reverse()) {
+      for (const mesh of state.targets[k]?.meshes || []) glowSet.set(mesh, PRESETS[k].glow)
+    }
+    glowMeshes = [...glowSet.keys()]
+    for (const mesh of glowMeshes) {
+      prepareGlow(mesh)
+      mesh.userData.glowColor = glowSet.get(mesh)
     }
 
     if (currentAction) { currentAction.fadeOut(0.3); currentAction = null }
@@ -367,12 +377,15 @@ export function createScene(canvas, container, { onLog = () => {} } = {}) {
       state.activeClip = clip.name
     }
 
-    state.hooks?.setScenario?.(state.scenario)
+    if (state.hooks?.setScenarios) state.hooks.setScenarios(keys)
+    else state.hooks?.setScenario?.(state.scenario)
   }
 
-  function setScenario(key) {
-    if (!state.ready) { state.pendingScenario = key; return }
-    applyScenario(key)
+  // keys: ['temperature', 'gas'] 같은 켜진 위험 목록 ('normal'·문자열 하나도 받음)
+  function setScenarios(arg) {
+    const keys = toKeys(arg)
+    if (!state.ready) { state.pendingScenario = keys; return }
+    applyScenarios(keys)
   }
 
   // ── 모델 불러오기 ────────────────────────────
@@ -504,7 +517,7 @@ export function createScene(canvas, container, { onLog = () => {} } = {}) {
 
     frameCamera()
     state.ready = true
-    applyScenario(state.pendingScenario || 'normal')
+    applyScenarios(state.pendingScenario || [])
     return info()
   })().catch((e) => {
     console.error(e)
@@ -553,6 +566,7 @@ export function createScene(canvas, container, { onLog = () => {} } = {}) {
       source: state.source,
       file: state.file,
       scenario: state.scenario,
+      scenarios: state.scenarios || [],
       particles: modeName,
       fog: scene.fog.density,
       beacon: beacon.visible,
@@ -565,5 +579,5 @@ export function createScene(canvas, container, { onLog = () => {} } = {}) {
     }
   }
 
-  return { setScenario, info, ready: readyPromise, isReady: () => state.ready }
+  return { setScenarios, setScenario: setScenarios, info, ready: readyPromise, isReady: () => state.ready }
 }

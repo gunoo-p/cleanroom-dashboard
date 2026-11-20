@@ -2,7 +2,8 @@
 // 반환값:
 //   root    — 장면에 넣을 그룹
 //   clips   — 애니메이션 클립 (GLB 애니메이션과 같은 경로로 재생)
-//   hooks   — setScenario(key) / update(dt, t) / info() : 화면·커튼·작업자 등 모형 고유 연출
+//   hooks   — setScenarios(keys) / update(dt, t) / info() : 화면·커튼·작업자 등 모형 고유 연출
+//             keys = 켜진 위험 목록(우선순위 순, 여러 개 가능). 커튼처럼 하나만 고르는 건 맨 앞(우선) 상황 기준
 //   anchors — 경광등 위치 등
 //   view    — 처음 카메라 시점 (참고 이미지와 같은 비스듬한 위쪽 시점)
 import * as THREE from 'three'
@@ -12,6 +13,7 @@ import { buildWorkers } from './workers.js'
 import { createNav, obstaclesFrom } from './nav.js'
 import { buildEffects } from './effects.js'
 import { setScreensAlarm, resetScreens } from './parts.js'
+import { primaryOf } from '../scenarios.js'
 
 // 시나리오별 공기 커튼 색·흐름 속도
 const CURTAIN = {
@@ -42,19 +44,18 @@ export function buildCleanroom() {
   // 시나리오별 효과 (연기·물방울·웅덩이·먼지·화살표·계기 등). 차압 때 문은 열지 않고 덜컹거리기만 한다.
   const effects = buildEffects(root)
 
-  let scenario = 'normal'
+  let scenario = 'normal' // 우선 상황 (커튼 색·흐름 기준)
   let curtain = CURTAIN.normal
   const targetColor = new THREE.Color(curtain.color)
 
   const hooks = {
-    setScenario(key) {
-      scenario = CURTAIN[key] ? key : 'normal'
+    setScenarios(keys) {
+      scenario = primaryOf(keys)
       curtain = CURTAIN[scenario]
       targetColor.setHex(curtain.color)
-      const alarm = scenario !== 'normal'
-      setScreensAlarm(alarm)
-      workers.setScenario(scenario)
-      effects.setScenario(scenario)
+      setScreensAlarm(keys.length > 0)
+      workers.setScenarios(keys)
+      effects.setScenarios(keys)
     },
     update(dt, t) {
       effects.update(dt, t)

@@ -128,8 +128,9 @@ export function createSensorCards(container) {
   }
 
   // 시나리오로 '위험 예정'인 센서 카드를 강조 (값이 아직 안 바뀌었어도 어떤 센서인지 보이게)
-  function highlight(key) {
-    for (const cfg of CARD_CONFIGS) els[cfg.key].card.classList.toggle('focus', cfg.key === key)
+  function highlight(keys) {
+    const list = Array.isArray(keys) ? keys : [keys]
+    for (const cfg of CARD_CONFIGS) els[cfg.key].card.classList.toggle('focus', list.includes(cfg.key))
   }
 
   function statuses() {

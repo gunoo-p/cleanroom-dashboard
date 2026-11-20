@@ -509,22 +509,23 @@ export function buildEffects(root) {
   const curtains = []
   root.traverse((o) => { if (o.isMesh && /_curtain_\d$/.test(o.name)) curtains.push(o) })
 
-  let scenario = 'normal'
-  let emitAcc = 0
+  let active = new Set() // 켜진 위험들 (여러 개 동시 가능 — 효과는 서로 다른 곳에 나타나 그대로 겹침)
+  let gasAcc = 0
+  let dustAcc = 0
   let dropAcc = 0
   let arrowAcc = 0
   const v3 = new THREE.Vector3()
   const vel = new THREE.Vector3()
 
-  function setScenario(key) {
-    if (key === scenario) return
-    scenario = key
-    // 이전 상황의 연기·먼지·화살표는 빨리 정리
-    if (key !== 'gas') gasPuffs.fadeOut()
-    if (key !== 'air_quality') dustPuffs.fadeOut()
-    if (key !== 'pressure') {
+  function setScenarios(keys) {
+    const next = new Set(keys)
+    // 꺼진 상황의 연기·먼지·화살표는 빨리 정리
+    if (active.has('gas') && !next.has('gas')) gasPuffs.fadeOut()
+    if (active.has('air_quality') && !next.has('air_quality')) dustPuffs.fadeOut()
+    if (active.has('pressure') && !next.has('pressure')) {
       for (const a of arrows) if (a.alive) a.age = Math.max(a.age, a.life - FADE)
     }
+    active = next
   }
 
   function emitDrop() {
@@ -570,33 +571,35 @@ export function buildEffects(root) {
   }
 
   function update(dt, t) {
-    siren.update(dt, t, scenario === 'temperature')
+    siren.update(dt, t, active.has('temperature'))
+    // 가스 연기와 먼지 덩어리가 함께 켜지면 방이 구름으로 뒤덮이지 않게 둘 다 덜 뿜는다
+    const crowd = active.has('gas') && active.has('air_quality') ? 1.7 : 1
     // 가스 연기: 케미컬 벤치 상단(배기부)에서
-    emitAcc += dt
-    if (scenario === 'gas') {
-      while (emitAcc > 0.1) {
-        emitAcc -= 0.1
+    if (active.has('gas')) {
+      gasAcc += dt
+      while (gasAcc > 0.1 * crowd) {
+        gasAcc -= 0.1 * crowd
         v3.set(rnd(-6.0, -0.8), 2.65, -5.0)
         vel.set(rnd(-0.15, 0.15), rnd(0.55, 0.9), rnd(0.3, 0.6))
         gasPuffs.emit(v3, vel, rnd(0.36, 0.6), rnd(2, 3), 0.95)
       }
-    } else if (scenario === 'air_quality') {
-      // 먼지 덩어리: FFU 아래에서 흘러나와 방 안을 떠다님
-      while (emitAcc > 0.13) {
-        emitAcc -= 0.13
+    } else gasAcc = 0
+    // 먼지 덩어리: FFU 아래에서 흘러나와 방 안을 떠다님
+    if (active.has('air_quality')) {
+      dustAcc += dt
+      while (dustAcc > 0.13 * crowd) {
+        dustAcc -= 0.13 * crowd
         const f = ffus[Math.floor(Math.random() * ffus.length)]
         v3.set(f.base.x + rnd(-0.7, 0.7), rnd(2.2, 3.8), f.base.z + rnd(-0.6, 0.6))
         vel.set(rnd(-0.35, 0.35), rnd(-0.2, 0.05), rnd(-0.1, 0.45))
         dustPuffs.emit(v3, vel, rnd(0.22, 0.42), rnd(2.2, 3.2), 0.8)
       }
-    } else {
-      emitAcc = 0
-    }
+    } else dustAcc = 0
     const gasAlive = gasPuffs.update(dt, t)
     const dustAlive = dustPuffs.update(dt, t)
 
     // 습도: 물방울 + 물결
-    if (scenario === 'humidity') {
+    if (active.has('humidity')) {
       dropAcc += dt
       while (dropAcc > 0.07) { dropAcc -= 0.07; emitDrop() }
     }
@@ -619,16 +622,16 @@ export function buildEffects(root) {
       r.m.material.opacity = 0.8 * (1 - r.age)
       if (r.age >= 1) r.m.visible = false
     }
-    grow(puddles, scenario === 'humidity', dt)
-    grow(dustSpots, scenario === 'air_quality', dt)
+    grow(puddles, active.has('humidity'), dt)
+    grow(dustSpots, active.has('air_quality'), dt)
     for (const f of fogPanes) {
-      const target = scenario === 'humidity' ? 0.72 : 0
+      const target = active.has('humidity') ? 0.72 : 0
       f.material.opacity += (target - f.material.opacity) * Math.min(1, dt * (target ? 0.8 : 2.5))
     }
 
     // 공기질: FFU 덜덜 + 커튼 깜빡
     for (const f of ffus) {
-      if (scenario === 'air_quality') {
+      if (active.has('air_quality')) {
         f.g.position.set(f.base.x + Math.sin(t * 47 + f.base.x) * 0.025, f.base.y, f.base.z + Math.cos(t * 53 + f.base.z) * 0.025)
         f.g.rotation.z = Math.sin(t * 41 + f.base.z) * 0.012
       } else {
@@ -636,10 +639,10 @@ export function buildEffects(root) {
         f.g.rotation.z = 0
       }
     }
-    for (const c of curtains) c.visible = scenario !== 'air_quality' || Math.sin(t * 9 + c.id) > -0.6
+    for (const c of curtains) c.visible = !active.has('air_quality') || Math.sin(t * 9 + c.id) > -0.6
 
     // 차압: 화살표 유입 + 문 덜컹
-    if (scenario === 'pressure') {
+    if (active.has('pressure')) {
       arrowAcc += dt
       while (arrowAcc > 0.12) { arrowAcc -= 0.12; emitArrow() }
     }
@@ -656,11 +659,11 @@ export function buildEffects(root) {
       a.g.scale.set(s, s, 1)
     }
     // 문 덜컹·벽 기울기·FFU 내려앉기는 squeeze가 처리
-    squeeze.update(dt, t, scenario === 'pressure')
+    squeeze.update(dt, t, active.has('pressure'))
 
     // 계기 바늘: 목표값으로 부드럽게 + 작은 흔들림
-    const pTarget = scenario === 'pressure' ? -10 : 15
-    const hTarget = scenario === 'humidity' ? 61 : 45
+    const pTarget = active.has('pressure') ? -10 : 15
+    const hTarget = active.has('humidity') ? 61 : 45
     const pv = pGauge.get() + (pTarget - pGauge.get()) * Math.min(1, dt * 1.2)
     const hv = hGauge.get() + (hTarget - hGauge.get()) * Math.min(1, dt * 0.8)
     pGauge.set(pv + Math.sin(t * 6) * 0.15)
@@ -671,7 +674,7 @@ export function buildEffects(root) {
 
   let last = { gasAlive: 0, dustAlive: 0, dropsAlive: 0, arrowsAlive: 0 }
   return {
-    setScenario,
+    setScenarios,
     update(dt, t) { last = update(dt, t) },
     summary: () => ({
       ...last,
